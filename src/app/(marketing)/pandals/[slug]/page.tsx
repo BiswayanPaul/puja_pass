@@ -20,25 +20,26 @@ import { PandalCard } from "@/features/pandals/components/pandal-card";
 import { SlotPicker } from "@/features/pandals/components/slot-picker";
 import {
   getNearbyPandals,
-  getPandalById,
-  getPandals,
+  getPandalBySlug,
+  getPandalSlugs,
   getReviewsForPandal,
   getSlotsForPandal,
   getTiersForPandal,
-} from "@/lib/queries";
+} from "@/server/pandals";
 
-export function generateStaticParams() {
-  return getPandals().map(({ id }) => ({ slug: id }));
+export async function generateStaticParams() {
+  const slugs = await getPandalSlugs();
+  return slugs.map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: PageProps<"/pandals/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const pandal = getPandalById(slug);
+  const pandal = await getPandalBySlug(slug);
   if (!pandal) return {};
   return {
     title: `${pandal.name} — ${pandal.neighbourhood}`,
     description: pandal.description,
-    alternates: { canonical: `/pandals/${pandal.id}` },
+    alternates: { canonical: `/pandals/${pandal.slug}` },
     openGraph: { images: [{ url: pandal.imageSrc, alt: pandal.imageAlt }] },
   };
 }
@@ -69,13 +70,15 @@ function PandalDetailSkeleton() {
 
 async function PandalDetail({ params }: { params: PageProps<"/pandals/[slug]">["params"] }) {
   const { slug } = await params;
-  const pandal = getPandalById(slug);
+  const pandal = await getPandalBySlug(slug);
   if (!pandal) notFound();
 
-  const tiers = getTiersForPandal(pandal.id);
-  const slots = getSlotsForPandal(pandal.id);
-  const reviews = getReviewsForPandal(pandal.id);
-  const nearby = getNearbyPandals(pandal.id);
+  const [tiers, slots, reviews, nearby] = await Promise.all([
+    getTiersForPandal(pandal.id),
+    getSlotsForPandal(pandal.id),
+    getReviewsForPandal(pandal.id),
+    getNearbyPandals(pandal.id),
+  ]);
 
   const facts = [
     { label: "Timings", value: pandal.timings, icon: Clock3 },
@@ -214,7 +217,7 @@ async function PandalDetail({ params }: { params: PageProps<"/pandals/[slug]">["
             <h2 className="mt-1 font-serif text-2xl font-semibold text-stone-950">Reserve a timed pass</h2>
             <p className="mt-1 text-sm text-stone-600">Add slots from several pandals to your trail and check out once.</p>
             <div className="mt-5">
-              <SlotPicker pandalId={pandal.id} tiers={tiers} slots={slots} />
+              <SlotPicker pandal={pandal} tiers={tiers} slots={slots} />
             </div>
           </section>
           <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">

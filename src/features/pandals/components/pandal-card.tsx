@@ -44,7 +44,7 @@ export function PandalCard({ pandal, featured = false }: PandalCardProps) {
           <div className="mt-3 flex flex-wrap gap-2"><span className={pandal.entryType === "Free Entry" ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700" : "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700"}>{pandal.entryType}</span><span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700">{pandal.highlight}</span></div>
         </div>
         <Link
-          href={`/pandals/${pandal.id}`}
+          href={`/pandals/${pandal.slug}`}
           aria-label={`View ${pandal.name}`}
           className="flex size-9 shrink-0 items-center justify-center rounded-full bg-orange-50 text-orange-700 transition-colors hover:bg-orange-600 hover:text-white"
         >

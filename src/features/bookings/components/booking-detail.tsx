@@ -83,7 +83,7 @@ function PassTicket({ pass }: { pass: Pass }) {
           >
             <Navigation className="size-3.5" /> Directions
           </a>
-          <Link href={`/pandals/${pandal.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:border-orange-300 hover:text-orange-700">
+          <Link href={`/pandals/${pandal.slug}`} className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:border-orange-300 hover:text-orange-700">
             Pandal details
           </Link>
         </div>

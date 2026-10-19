@@ -2,12 +2,19 @@
 // The mock data in `src/data` conforms to these shapes, so swapping it for a
 // real database only requires re-implementing the functions in `src/lib/queries.ts`.
 
-export type Area = "North Kolkata" | "South Kolkata" | "Central Kolkata" | "Salt Lake" | "New Town";
+export type Area =
+  | "North Kolkata"
+  | "South Kolkata"
+  | "Central Kolkata"
+  | "Salt Lake"
+  | "New Town";
 export type EntryType = "Free Entry" | "Paid Entry";
 export type CrowdLevel = "Low" | "Moderate" | "High" | "Very High";
 
 export type Pandal = {
   id: string;
+  /** URL segment: /pandals/[slug] */
+  slug: string;
   name: string;
   clubName: string;
   neighbourhood: string;
@@ -70,11 +77,22 @@ export type Review = {
   comment: string;
 };
 
+/** A cart line. Display fields are a snapshot taken when the slot was added. */
 export type TrailItem = {
   id: string;
   pandalId: string;
+  pandalSlug: string;
+  pandalName: string;
+  neighbourhood: string;
+  imageSrc: string;
+  imageAlt: string;
   tierId: string;
+  tierName: string;
+  unitPrice: number;
   slotId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
   quantity: number;
 };
 
@@ -133,4 +151,9 @@ export type CheckIn = {
   result: "admitted" | "duplicate" | "invalid";
 };
 
-export type DailySales = { date: string; label: string; tickets: number; revenue: number };
+export type DailySales = {
+  date: string;
+  label: string;
+  tickets: number;
+  revenue: number;
+};

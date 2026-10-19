@@ -11,12 +11,12 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { FESTIVAL_END, FESTIVAL_START } from "@/data/festival";
 import { areas } from "@/data/pandals";
-import { getPandals } from "@/lib/queries";
 import type { Pandal } from "@/types";
 
-const allPandals = getPandals();
-
 type FilterSidebarProps = {
+  /** Every pandal, for the filter counts. */
+  allPandals: Pandal[];
+  /** Pandals matching the current filters, shown on the map. */
   pandals: Pandal[];
   selectedAreas: string[];
   selectedEntryTypes: string[];
@@ -62,6 +62,7 @@ function toggleItem(values: string[], value: string) {
 }
 
 export function FilterSidebar({
+  allPandals,
   pandals,
   selectedAreas,
   selectedEntryTypes,
@@ -90,7 +91,7 @@ export function FilterSidebar({
           pandals.map((pandal) => (
             <Link
               key={pandal.id}
-              href={`/pandals/${pandal.id}`}
+              href={`/pandals/${pandal.slug}`}
               title={pandal.name}
               aria-label={pandal.name}
               style={{ left: `${pandal.mapPosition.x}%`, top: `${pandal.mapPosition.y}%` }}

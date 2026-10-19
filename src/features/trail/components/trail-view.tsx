@@ -6,18 +6,18 @@ import { AlertTriangle, ArrowRight, Clock3, MapPin, Minus, Plus, Route, ShieldCh
 import EmptyState from "@/components/shared/EmptyState";
 import { MAX_PASSES_PER_SLOT } from "@/data/festival";
 import { PandalCard } from "@/features/pandals/components/pandal-card";
-import { getFeaturedPandals } from "@/lib/queries";
+import type { Pandal } from "@/types";
 import { formatINR, formatPujaDate, formatTimeRange } from "@/lib/format";
 import { clearTrail, removeFromTrail, updateTrailQuantity, useTrail, type TrailLine } from "../use-trail";
 import { TrailSummary } from "./trail-summary";
 
 function groupByDate(lines: TrailLine[]) {
   const groups = new Map<string, TrailLine[]>();
-  for (const line of lines) groups.set(line.slot.date, [...(groups.get(line.slot.date) ?? []), line]);
+  for (const line of lines) groups.set(line.date, [...(groups.get(line.date) ?? []), line]);
   return [...groups.entries()];
 }
 
-export function TrailView() {
+export function TrailView({ suggestions }: { suggestions: Pandal[] }) {
   const trail = useTrail();
 
   if (!trail.lines.length) {
@@ -36,7 +36,7 @@ export function TrailView() {
         <section>
           <h2 className="font-serif text-3xl font-semibold text-stone-950">Popular starting points</h2>
           <div className="mt-6 grid gap-6 md:grid-cols-3">
-            {getFeaturedPandals().slice(0, 3).map((pandal) => <PandalCard key={pandal.id} pandal={pandal} />)}
+            {suggestions.map((pandal) => <PandalCard key={pandal.id} pandal={pandal} />)}
           </div>
         </section>
       </div>
@@ -54,28 +54,28 @@ export function TrailView() {
             </h2>
             <ol className="mt-4 space-y-3 border-l-2 border-dashed border-orange-200 pl-5 ml-1.5">
               {lines.map((line) => {
-                const clash = lines.find((other) => other !== line && other.pandalId !== line.pandalId && other.slot.startTime === line.slot.startTime);
+                const clash = lines.find((other) => other !== line && other.pandalId !== line.pandalId && other.startTime === line.startTime);
                 return (
                   <li key={line.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
                     <div className="flex gap-4">
                       <div className="relative size-20 shrink-0 overflow-hidden rounded-xl sm:size-24">
-                        <Image src={line.pandal.imageSrc} alt={line.pandal.imageAlt} fill sizes="96px" className="object-cover" />
+                        <Image src={line.imageSrc} alt={line.imageAlt} fill sizes="96px" className="object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <Link href={`/pandals/${line.pandal.id}`} className="font-serif text-lg font-semibold text-stone-950 hover:text-orange-700">
-                              {line.pandal.name}
+                            <Link href={`/pandals/${line.pandalSlug}`} className="font-serif text-lg font-semibold text-stone-950 hover:text-orange-700">
+                              {line.pandalName}
                             </Link>
-                            <p className="mt-0.5 flex items-center gap-1 text-xs text-stone-500"><MapPin className="size-3.5" aria-hidden="true" />{line.pandal.neighbourhood}</p>
+                            <p className="mt-0.5 flex items-center gap-1 text-xs text-stone-500"><MapPin className="size-3.5" aria-hidden="true" />{line.neighbourhood}</p>
                           </div>
-                          <button type="button" onClick={() => removeFromTrail(line.id)} aria-label={`Remove ${line.pandal.name}`} className="rounded-full p-2 text-stone-400 hover:bg-rose-50 hover:text-rose-600">
+                          <button type="button" onClick={() => removeFromTrail(line.id)} aria-label={`Remove ${line.pandalName}`} className="rounded-full p-2 text-stone-400 hover:bg-rose-50 hover:text-rose-600">
                             <Trash2 className="size-4" />
                           </button>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 font-medium text-orange-800"><Clock3 className="size-3.5" aria-hidden="true" />{formatTimeRange(line.slot.startTime, line.slot.endTime)}</span>
-                          <span className="rounded-full bg-stone-100 px-2.5 py-1 font-medium text-stone-700">{line.tier.name}</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 font-medium text-orange-800"><Clock3 className="size-3.5" aria-hidden="true" />{formatTimeRange(line.startTime, line.endTime)}</span>
+                          <span className="rounded-full bg-stone-100 px-2.5 py-1 font-medium text-stone-700">{line.tierName}</span>
                         </div>
                         <div className="mt-3 flex items-center justify-between">
                           <div className="flex items-center gap-1 rounded-full border border-stone-200 p-0.5">
@@ -83,14 +83,14 @@ export function TrailView() {
                             <span className="w-6 text-center text-sm font-semibold">{line.quantity}</span>
                             <button type="button" aria-label="More passes" disabled={line.quantity >= MAX_PASSES_PER_SLOT} onClick={() => updateTrailQuantity(line.id, line.quantity + 1)} className="flex size-7 items-center justify-center rounded-full hover:bg-stone-100 disabled:opacity-40"><Plus className="size-3.5" /></button>
                           </div>
-                          <p className="text-sm text-stone-500">{formatINR(line.tier.price)} × {line.quantity} = <span className="font-semibold text-stone-950">{formatINR(line.lineTotal)}</span></p>
+                          <p className="text-sm text-stone-500">{formatINR(line.unitPrice)} × {line.quantity} = <span className="font-semibold text-stone-950">{formatINR(line.lineTotal)}</span></p>
                         </div>
                       </div>
                     </div>
                     {clash && (
                       <p className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
                         <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
-                        Same time as {clash.pandal.name}. Leave time to travel between pandals.
+                        Same time as {clash.pandalName}. Leave time to travel between pandals.
                       </p>
                     )}
                   </li>

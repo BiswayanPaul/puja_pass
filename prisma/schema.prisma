@@ -1,0 +1,383 @@
+// PujaPass database schema (Prisma ORM 7, PostgreSQL).
+// Mirrors the domain types in `src/types/index.ts`.
+// Conventions: money is stored in whole rupees (Int); slot dates/times are IST.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  VISITOR
+  CLUB_ADMIN
+  PLATFORM_ADMIN
+}
+
+enum ClubMemberRole {
+  OWNER
+  ADMIN
+  SCANNER
+}
+
+enum ClubApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum EntryType {
+  FREE
+  PAID
+}
+
+enum CrowdLevel {
+  LOW
+  MODERATE
+  HIGH
+  VERY_HIGH
+}
+
+enum BookingStatus {
+  PENDING // created at checkout, seats held until `expiresAt`
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  EXPIRED // payment not completed before the hold expired
+}
+
+enum PassStatus {
+  VALID
+  USED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  NET_BANKING
+}
+
+enum PaymentStatus {
+  CREATED
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum CheckInResult {
+  ADMITTED
+  DUPLICATE
+  INVALID
+}
+
+// ─── Users & clubs ────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String?  @unique
+  phone        String?  @unique
+  passwordHash String?
+  role         UserRole @default(VISITOR)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships  ClubMember[]
+  bookings     Booking[]
+  reviews      Review[]
+  savedPandals SavedPandal[]
+  applications ClubApplication[]
+  checkIns     CheckIn[]
+}
+
+model Club {
+  id                 String    @id @default(cuid())
+  name               String
+  registrationNumber String?   @unique
+  established        Int?
+  verified           Boolean   @default(false)
+  verifiedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  members     ClubMember[]
+  pandals     Pandal[]
+  application ClubApplication?
+}
+
+model ClubMember {
+  userId    String
+  clubId    String
+  role      ClubMemberRole @default(ADMIN)
+  createdAt DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@id([userId, clubId])
+  @@index([clubId])
+}
+
+/// Submitted from /clubs/register and reviewed by a platform admin.
+model ClubApplication {
+  id                 String                @id @default(cuid())
+  clubName           String
+  registrationNumber String
+  established        Int
+  area               String
+  address            String
+  theme              String?
+  description        String
+  expectedFootfall   String
+  offerings          String[]
+  contactName        String
+  contactRole        String
+  email              String
+  phone              String
+  certificateUrl     String?
+  permissionUrl      String?
+  status             ClubApplicationStatus @default(PENDING)
+  reviewNotes        String?
+  createdAt          DateTime              @default(now())
+  reviewedAt         DateTime?
+
+  submittedById String?
+  submittedBy   User?   @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  /// Set once the application is approved and the club is created.
+  clubId        String? @unique
+  club          Club?   @relation(fields: [clubId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+}
+
+// ─── Pandals ──────────────────────────────────────────────────────────────────
+
+model Pandal {
+  id               String     @id @default(cuid())
+  slug             String     @unique
+  name             String
+  neighbourhood    String
+  address          String
+  /// "North Kolkata", "Salt Lake", ... kept as text so new areas need no migration.
+  area             String
+  category         String
+  coverImageUrl    String
+  coverImageAlt    String
+  entryType        EntryType
+  highlight        String
+  tags             String[]
+  featured         Boolean    @default(false)
+  ecoFriendly      Boolean    @default(false)
+  published        Boolean    @default(true)
+  themeTitle       String
+  themeDescription String
+  description      String
+  established      Int
+  idolArtist       String
+  timings          String
+  crowdLevel       CrowdLevel
+  nearestMetro     String
+  amenities        String[]
+  freeEntryInfo    String
+  latitude         Float?
+  longitude        Float?
+  /// Position on the stylised UI map, in percent. Replace with lat/lng once a real map is used.
+  mapX             Float?
+  mapY             Float?
+  /// Denormalised review aggregates, updated when reviews change.
+  ratingAverage    Float      @default(0)
+  reviewCount      Int        @default(0)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  clubId String
+  club   Club   @relation(fields: [clubId], references: [id], onDelete: Restrict)
+
+  images      PandalImage[]
+  ticketTiers TicketTier[]
+  slots       Slot[]
+  reviews     Review[]
+  savedBy     SavedPandal[]
+  checkIns    CheckIn[]
+
+  @@index([area])
+  @@index([clubId])
+}
+
+model PandalImage {
+  id       String @id @default(cuid())
+  pandalId String
+  url      String
+  alt      String
+  position Int    @default(0)
+
+  pandal Pandal @relation(fields: [pandalId], references: [id], onDelete: Cascade)
+
+  @@index([pandalId, position])
+}
+
+// ─── Tickets & slots ──────────────────────────────────────────────────────────
+
+model TicketTier {
+  id              String   @id @default(cuid())
+  pandalId        String
+  name            String
+  description     String
+  /// Whole rupees.
+  price           Int
+  perks           String[]
+  capacityPerSlot Int
+  active          Boolean  @default(true)
+  position        Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  pandal Pandal @relation(fields: [pandalId], references: [id], onDelete: Cascade)
+  passes Pass[]
+
+  @@index([pandalId])
+}
+
+/// One entry window at a pandal. `booked` is incremented atomically at checkout:
+/// UPDATE "Slot" SET booked = booked + n WHERE id = $1 AND booked + n <= capacity
+model Slot {
+  id          String   @id @default(cuid())
+  pandalId    String
+  date        DateTime @db.Date
+  /// "HH:mm", IST.
+  startTime   String   @db.VarChar(5)
+  endTime     String   @db.VarChar(5)
+  capacity    Int
+  booked      Int      @default(0)
+  salesPaused Boolean  @default(false)
+
+  pandal Pandal @relation(fields: [pandalId], references: [id], onDelete: Cascade)
+  passes Pass[]
+
+  @@unique([pandalId, date, startTime])
+  @@index([date])
+}
+
+// ─── Bookings, passes & payments ──────────────────────────────────────────────
+
+model Booking {
+  id            String         @id @default(cuid())
+  /// Human-facing reference, e.g. "PP26-4K7Q2M".
+  reference     String         @unique
+  status        BookingStatus  @default(PENDING)
+  contactName   String
+  contactEmail  String
+  contactPhone  String
+  subtotal      Int
+  fees          Int
+  total         Int
+  paymentMethod PaymentMethod?
+  /// Seat hold expiry for PENDING bookings.
+  expiresAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  cancelledAt   DateTime?
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  passes   Pass[]
+  payments Payment[]
+
+  @@index([userId, createdAt])
+  @@index([status, expiresAt])
+}
+
+/// One QR pass per (slot, tier) in a booking; admits `quantity` people.
+model Pass {
+  id          String     @id @default(cuid())
+  /// Shown under the QR code, e.g. "SRB-2930-8841". The QR itself should carry a signed token.
+  code        String     @unique
+  holderName  String
+  quantity    Int
+  unitPrice   Int
+  status      PassStatus @default(VALID)
+  checkedInAt DateTime?
+
+  bookingId String
+  booking   Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  slotId    String
+  slot      Slot       @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  tierId    String
+  tier      TicketTier @relation(fields: [tierId], references: [id], onDelete: Restrict)
+
+  checkIns CheckIn[]
+
+  @@index([bookingId])
+  @@index([slotId])
+}
+
+model Payment {
+  id                String         @id @default(cuid())
+  bookingId         String
+  provider          String         @default("razorpay")
+  providerOrderId   String         @unique
+  providerPaymentId String?        @unique
+  amount            Int
+  status            PaymentStatus  @default(CREATED)
+  method            PaymentMethod?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+}
+
+/// Every scan at the gate, including rejected ones.
+model CheckIn {
+  id          String        @id @default(cuid())
+  scannedCode String
+  result      CheckInResult
+  createdAt   DateTime      @default(now())
+
+  pandalId    String
+  pandal      Pandal  @relation(fields: [pandalId], references: [id], onDelete: Cascade)
+  passId      String?
+  pass        Pass?   @relation(fields: [passId], references: [id], onDelete: SetNull)
+  scannedById String?
+  scannedBy   User?   @relation(fields: [scannedById], references: [id], onDelete: SetNull)
+
+  @@index([pandalId, createdAt])
+  @@index([passId])
+}
+
+// ─── Engagement ───────────────────────────────────────────────────────────────
+
+model Review {
+  id         String   @id @default(cuid())
+  pandalId   String
+  authorName String
+  rating     Int
+  comment    String
+  createdAt  DateTime @default(now())
+
+  pandal Pandal  @relation(fields: [pandalId], references: [id], onDelete: Cascade)
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([pandalId, createdAt])
+}
+
+model SavedPandal {
+  userId    String
+  pandalId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pandal Pandal @relation(fields: [pandalId], references: [id], onDelete: Cascade)
+
+  @@id([userId, pandalId])
+  @@index([pandalId])
+}

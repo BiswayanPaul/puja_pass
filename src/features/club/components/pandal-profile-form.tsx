@@ -39,7 +39,7 @@ export function PandalProfileForm({ pandal }: { pandal: Pandal }) {
         description="This is what visitors see on your public pandal page."
         actions={
           <>
-            <Link href={`/pandals/${pandal.id}`} className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-50">
+            <Link href={`/pandals/${pandal.slug}`} className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-50">
               <ExternalLink className="size-4" /> View live page
             </Link>
             <button type="submit" className="rounded-full bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700">Save changes</button>

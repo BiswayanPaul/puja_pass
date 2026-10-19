@@ -19,7 +19,7 @@ const gallery = [
 
 const commonAmenities = ["Drinking water", "First aid", "Wheelchair access", "Help desk"];
 
-export const pandals: Pandal[] = [
+const rawPandals: Omit<Pandal, "slug">[] = [
   {
     id: "sreebhumi-sporting-club",
     name: "Sreebhumi Sporting Club",
@@ -417,6 +417,9 @@ export const pandals: Pandal[] = [
     distanceKm: 12.5,
   },
 ];
+
+// In the mock data the id doubles as the slug (the seed keeps them equal too).
+export const pandals: Pandal[] = rawPandals.map((pandal) => ({ ...pandal, slug: pandal.id }));
 
 export const featuredPandals = pandals.filter((pandal) => pandal.featured);
 

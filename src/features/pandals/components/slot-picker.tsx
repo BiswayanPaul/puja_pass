@@ -7,7 +7,7 @@ import { MAX_PASSES_PER_SLOT, pujaDays } from "@/data/festival";
 import { addToTrail } from "@/features/trail/use-trail";
 import { formatDate, formatINR, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { Slot, TicketTier } from "@/types";
+import type { Pandal, Slot, TicketTier } from "@/types";
 
 export function availability(slot: Slot) {
   const remaining = slot.capacity - slot.booked;
@@ -16,7 +16,7 @@ export function availability(slot: Slot) {
   return { remaining, label: "Available", tone: "open" as const };
 }
 
-export function SlotPicker({ pandalId, tiers, slots }: { pandalId: string; tiers: TicketTier[]; slots: Slot[] }) {
+export function SlotPicker({ pandal, tiers, slots }: { pandal: Pandal; tiers: TicketTier[]; slots: Slot[] }) {
   const activeTiers = tiers.filter((tier) => tier.active);
   const [date, setDate] = useState(pujaDays[0].date);
   const [tierId, setTierId] = useState(activeTiers[0]?.id ?? "");
@@ -34,7 +34,22 @@ export function SlotPicker({ pandalId, tiers, slots }: { pandalId: string; tiers
 
   const handleAdd = () => {
     if (!selectedSlot) return;
-    addToTrail({ pandalId, tierId: tier.id, slotId: selectedSlot.id, quantity });
+    addToTrail({
+      pandalId: pandal.id,
+      pandalSlug: pandal.slug,
+      pandalName: pandal.name,
+      neighbourhood: pandal.neighbourhood,
+      imageSrc: pandal.imageSrc,
+      imageAlt: pandal.imageAlt,
+      tierId: tier.id,
+      tierName: tier.name,
+      unitPrice: tier.price,
+      slotId: selectedSlot.id,
+      date: selectedSlot.date,
+      startTime: selectedSlot.startTime,
+      endTime: selectedSlot.endTime,
+      quantity,
+    });
     setAdded(true);
   };
 

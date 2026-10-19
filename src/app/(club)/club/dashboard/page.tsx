@@ -6,7 +6,8 @@ import { SalesChart } from "@/features/club/components/sales-chart";
 import { CLUB_PANDAL_ID, CLUB_TODAY, dailySales, recentCheckIns, tierSales, todayStats } from "@/data/club";
 import { demoClubAdmin } from "@/data/users";
 import { formatINR, formatPujaDate, formatTimeRange } from "@/lib/format";
-import { getSlotsForPandal, getTierById } from "@/lib/queries";
+import { notFound } from "next/navigation";
+import { getPandalBySlug, getSlotsForPandal, getTiersForPandal } from "@/server/pandals";
 
 export const metadata: Metadata = { title: "Club dashboard", robots: { index: false } };
 
@@ -16,10 +17,12 @@ const checkInStyles = {
   invalid: { label: "Invalid", icon: XCircle, className: "bg-rose-50 text-rose-700" },
 };
 
-export default function ClubDashboardPage() {
+export default async function ClubDashboardPage() {
+  const pandal = await getPandalBySlug(CLUB_PANDAL_ID);
+  if (!pandal) notFound();
+  const [todaySlots, tiers] = await Promise.all([getSlotsForPandal(pandal.id, CLUB_TODAY), getTiersForPandal(pandal.id)]);
   const totalTickets = dailySales.reduce((total, day) => total + day.tickets, 0);
   const totalRevenue = dailySales.reduce((total, day) => total + day.revenue, 0);
-  const todaySlots = getSlotsForPandal(CLUB_PANDAL_ID, CLUB_TODAY);
   const occupancy = Math.round((todaySlots.reduce((total, slot) => total + slot.booked, 0) / todaySlots.reduce((total, slot) => total + slot.capacity, 0)) * 100);
   const maxTierTickets = Math.max(...tierSales.map((tier) => tier.tickets));
 
@@ -73,7 +76,7 @@ export default function ClubDashboardPage() {
           <h2 className="font-serif text-xl font-semibold text-stone-950">Sales by pass type</h2>
           <ul className="mt-5 space-y-5">
             {tierSales.map((sale) => {
-              const tier = getTierById(sale.tierId);
+              const tier = tiers.find((item) => item.id === sale.tierId);
               return (
                 <li key={sale.tierId}>
                   <div className="flex items-baseline justify-between text-sm">

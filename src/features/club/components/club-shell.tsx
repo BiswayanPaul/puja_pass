@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { demoClubAdmin } from "@/data/users";
 import { signOut, useSession } from "@/features/auth/use-session";
-import { getPandalById } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -45,12 +44,11 @@ function NavLinks({ onNavigate }: { onNavigate?: boolean }) {
   );
 }
 
-export function ClubShell({ children }: { children: ReactNode }) {
+export function ClubShell({ pandal, children }: { pandal: { name: string; clubName: string; slug: string } | null; children: ReactNode }) {
   const router = useRouter();
   const user = useSession();
   // The mock club area is browsable without signing in; it falls back to the demo admin.
   const admin = user?.role === "club_admin" ? user : demoClubAdmin;
-  const pandal = getPandalById(admin.pandalId ?? "");
 
   const handleSignOut = () => {
     signOut();
@@ -60,7 +58,7 @@ export function ClubShell({ children }: { children: ReactNode }) {
   const footer = (
     <div className="space-y-3 border-t border-white/10 pt-4">
       {pandal && (
-        <Link href={`/pandals/${pandal.id}`} className="flex items-center gap-2 px-3 text-xs font-medium text-stone-400 hover:text-orange-300">
+        <Link href={`/pandals/${pandal.slug}`} className="flex items-center gap-2 px-3 text-xs font-medium text-stone-400 hover:text-orange-300">
           <ExternalLink className="size-3.5" aria-hidden="true" /> View public page
         </Link>
       )}

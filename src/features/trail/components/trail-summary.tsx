@@ -11,9 +11,9 @@ export function TrailSummary({ trail, children }: { trail: ReturnType<typeof use
         {trail.lines.map((line) => (
           <li key={line.id} className="flex justify-between gap-3">
             <span className="min-w-0">
-              <span className="block truncate font-medium text-stone-900">{line.pandal.name}</span>
+              <span className="block truncate font-medium text-stone-900">{line.pandalName}</span>
               <span className="block text-xs text-stone-500">
-                {formatPujaDate(line.slot.date)} · {formatTime(line.slot.startTime)} · {line.quantity} × {line.tier.name}
+                {formatPujaDate(line.date)} · {formatTime(line.startTime)} · {line.quantity} × {line.tierName}
               </span>
             </span>
             <span className="shrink-0 font-medium text-stone-900">{formatINR(line.lineTotal)}</span>

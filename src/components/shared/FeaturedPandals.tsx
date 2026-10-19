@@ -1,9 +1,10 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { PandalCard } from "@/features/pandals/components/pandal-card";
-import { getFeaturedPandals } from "@/lib/queries";
+import { getFeaturedPandals } from "@/server/pandals";
 
-export default function FeaturedPandals() {
+export default async function FeaturedPandals() {
+  const pandals = await getFeaturedPandals();
   return (
     <section id="explore" className="bg-white py-18 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -20,7 +21,7 @@ export default function FeaturedPandals() {
           </Link>
         </div>
         <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {getFeaturedPandals().slice(0, 3).map((pandal) => <PandalCard key={pandal.id} pandal={pandal} />)}
+          {pandals.map((pandal) => <PandalCard key={pandal.id} pandal={pandal} />)}
         </div>
       </div>
     </section>
