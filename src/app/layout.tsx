@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { siteUrl } from "@/lib/site";
 import "./globals.css";
 
 
@@ -15,19 +16,16 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-// Set NEXT_PUBLIC_SITE_URL to your real production domain.
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
 
   title: {
-    default: "PujaPass | Discover and Book Puja Services",
+    default: "PujaPass | Durga Puja Pandals & Timed Entry Passes in Kolkata",
     template: "%s | PujaPass",
   },
 
   description:
-    "Discover puja services and plan your religious ceremonies with PujaPass.",
+    "Discover Kolkata's Durga Puja pandals, reserve timed entry passes, and plan your own multi-pandal Puja trail.",
 
   applicationName: "PujaPass",
 
@@ -38,18 +36,18 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "PujaPass",
-    title: "PujaPass | Discover and Book Puja Services",
+    title: "PujaPass | Durga Puja Pandals & Timed Entry Passes in Kolkata",
     description:
-      "Discover puja services and plan your religious ceremonies with PujaPass.",
+      "Discover Kolkata's Durga Puja pandals, reserve timed entry passes, and plan your own multi-pandal Puja trail.",
     url: "/",
     locale: "en_IN",
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "PujaPass | Discover and Book Puja Services",
+    title: "PujaPass | Durga Puja Pandals & Timed Entry Passes in Kolkata",
     description:
-      "Discover puja services and plan your religious ceremonies with PujaPass.",
+      "Discover Kolkata's Durga Puja pandals, reserve timed entry passes, and plan your own multi-pandal Puja trail.",
   },
 
   robots: {
