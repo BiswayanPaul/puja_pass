@@ -6,6 +6,7 @@ import { getFeaturedPandals } from "@/server/pandals";
 export const metadata: Metadata = {
   title: "My Puja Trail",
   description: "Plan your multi-pandal Durga Puja trail and check out all your passes at once.",
+  alternates: { canonical: "/trail" },
 };
 
 export default async function TrailPage() {
