@@ -5,6 +5,8 @@ import { getFeaturedPandals } from "@/server/pandals";
 
 export default async function FeaturedPandals() {
   const pandals = await getFeaturedPandals();
+  if (pandals.length === 0) return null;
+
   return (
     <section id="explore" className="bg-white py-18 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

@@ -29,6 +29,9 @@ import {
 
 export async function generateStaticParams() {
   const slugs = await getPandalSlugs();
+  // Cache Components requires at least one param. With an empty database we
+  // prerender a placeholder (it hits notFound()); real slugs render on request.
+  if (slugs.length === 0) return [{ slug: "__placeholder" }];
   return slugs.map((slug) => ({ slug }));
 }
 
