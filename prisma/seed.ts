@@ -6,6 +6,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import type { BookingStatus, CrowdLevel, PassStatus, PaymentMethod } from "../src/generated/prisma/enums";
+import { applicants, clubApplications, platformAdmin, reviewedClubs, SREEBHUMI_REGISTRATION } from "../src/data/admin";
 import { bookings } from "../src/data/bookings";
 import { pandals } from "../src/data/pandals";
 import { reviews } from "../src/data/reviews";
@@ -14,7 +15,14 @@ import { ticketTiers } from "../src/data/ticket-tiers";
 import { demoClubAdmin, users } from "../src/data/users";
 import type * as UI from "../src/types";
 
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+// Like the Prisma CLI, prefer the direct (session-mode) connection over the
+// pooled one. A remote database can take seconds to connect, longer than
+// Prisma's default 2s wait to start a transaction, so allow more time.
+const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: connectionString! }),
+  transactionOptions: { maxWait: 20_000, timeout: 60_000 },
+});
 
 const crowdLevels: Record<UI.CrowdLevel, CrowdLevel> = { Low: "LOW", Moderate: "MODERATE", High: "HIGH", "Very High": "VERY_HIGH" };
 const bookingStatuses: Record<UI.BookingStatus, BookingStatus> = { confirmed: "CONFIRMED", completed: "COMPLETED", cancelled: "CANCELLED" };
@@ -60,10 +68,22 @@ async function main() {
       role: user.role === "club_admin" ? "CLUB_ADMIN" : "VISITOR",
     })),
   });
+  await prisma.user.create({ data: { ...platformAdmin, role: "PLATFORM_ADMIN" } });
+  const clubOwnerIds = new Set(reviewedClubs.map((club) => club.ownerId));
+  await prisma.user.createMany({
+    data: applicants.map((user) => ({ ...user, role: clubOwnerIds.has(user.id) ? ("CLUB_ADMIN" as const) : ("VISITOR" as const) })),
+  });
 
   for (const pandal of pandals) {
     const club = await prisma.club.create({
-      data: { id: `club-${pandal.id}`, name: pandal.clubName, established: pandal.established, verified: true, verifiedAt: new Date("2026-09-12T00:00:00Z") },
+      data: {
+        id: `club-${pandal.id}`,
+        name: pandal.clubName,
+        registrationNumber: pandal.id === "sreebhumi-sporting-club" ? SREEBHUMI_REGISTRATION : null,
+        established: pandal.established,
+        verified: true,
+        verifiedAt: new Date("2026-09-12T00:00:00Z"),
+      },
     });
 
     await prisma.pandal.create({
@@ -105,6 +125,65 @@ async function main() {
   await prisma.clubMember.create({
     data: { userId: demoClubAdmin.id, clubId: `club-${demoClubAdmin.pandalId}`, role: "OWNER" },
   });
+
+  // Clubs that came through the admin review. Their pandals are not public:
+  // a draft with an incomplete profile, one ready to publish, and one whose
+  // club had its verification revoked.
+  for (const club of reviewedClubs) {
+    const application = clubApplications.find((item) => item.id === club.applicationId)!;
+    await prisma.club.create({
+      data: {
+        id: club.id,
+        name: application.clubName,
+        registrationNumber: application.registrationNumber,
+        established: application.established,
+        verified: club.verified,
+        verifiedAt: new Date(club.verifiedAt),
+        verificationNote: club.verificationNote,
+        members: { create: { userId: club.ownerId, role: "OWNER" } },
+        pandals: {
+          create: {
+            ...club.pandal,
+            slug: club.pandal.id,
+            entryType: "FREE",
+            crowdLevel: "MODERATE",
+            tags: [],
+            published: false,
+          },
+        },
+      },
+    });
+  }
+
+  for (const application of clubApplications) {
+    await prisma.clubApplication.create({
+      data: {
+        id: application.id,
+        clubName: application.clubName,
+        registrationNumber: application.registrationNumber,
+        established: application.established,
+        area: application.area,
+        address: application.address,
+        theme: application.theme,
+        description: application.description,
+        expectedFootfall: application.expectedFootfall,
+        offerings: application.offerings,
+        contactName: application.contactName,
+        contactRole: application.contactRole,
+        email: application.email,
+        phone: application.phone,
+        certificateUrl: application.certificate,
+        permissionUrl: application.permission,
+        createdAt: new Date(application.submittedAt),
+        submittedById: application.submittedById,
+        status: application.review?.status ?? "PENDING",
+        reviewNotes: application.review?.notes,
+        reviewedAt: application.review ? new Date(application.review.reviewedAt) : null,
+        reviewedById: application.review ? platformAdmin.id : null,
+        clubId: application.review?.clubId,
+      },
+    });
+  }
 
   await prisma.ticketTier.createMany({
     data: ticketTiers.map((tier, position) => ({
@@ -188,6 +267,8 @@ async function main() {
     users: await prisma.user.count(),
     clubs: await prisma.club.count(),
     pandals: await prisma.pandal.count(),
+    unpublishedPandals: await prisma.pandal.count({ where: { published: false } }),
+    clubApplications: await prisma.clubApplication.count(),
     ticketTiers: await prisma.ticketTier.count(),
     slots: await prisma.slot.count(),
     reviews: await prisma.review.count(),

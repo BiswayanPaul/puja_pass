@@ -58,7 +58,7 @@ export function ClubShell({ pandal, children }: { pandal: { name: string; clubNa
   const footer = (
     <div className="space-y-3 border-t border-white/10 pt-4">
       {pandal && (
-        <Link href={`/pandals/${pandal.slug}`} className="flex items-center gap-2 px-3 text-xs font-medium text-stone-400 hover:text-orange-300">
+        <Link href={`/pandals/${pandal.slug}`} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-stone-400 hover:text-orange-300">
           <ExternalLink className="size-3.5" aria-hidden="true" /> View public page
         </Link>
       )}

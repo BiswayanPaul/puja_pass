@@ -119,7 +119,7 @@ export function FilterSidebar({
         <button
           type="button"
           onClick={onClear}
-          className="text-xs font-semibold text-orange-600"
+          className="-mr-2 rounded-full px-2 py-1.5 text-sm font-semibold text-orange-600 hover:bg-orange-50"
         >
           Clear all
         </button>
@@ -134,11 +134,11 @@ export function FilterSidebar({
             placeholder="Search area..."
           />
         </label>
-        <div className="mt-3 space-y-2">
+        <div className="mt-2">
           {visibleAreas.map((area) => (
             <label
               key={area}
-              className="flex items-center gap-2 text-sm text-stone-600"
+              className="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-stone-600"
             >
               <input
                 type="checkbox"
@@ -152,11 +152,11 @@ export function FilterSidebar({
         </div>
       </FilterGroup>
       <FilterGroup title="Entry Type">
-        <div className="mt-3 space-y-2">
+        <div className="mt-2">
           {["Free Entry", "Paid Entry"].map((type) => (
             <label
               key={type}
-              className="flex items-center gap-2 text-sm text-stone-600"
+              className="flex min-h-9 cursor-pointer items-center gap-2 text-sm text-stone-600"
             >
               <input
                 type="checkbox"

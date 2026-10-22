@@ -99,7 +99,7 @@ export function TrailView({ suggestions }: { suggestions: Pandal[] }) {
             </ol>
           </section>
         ))}
-        <button type="button" onClick={clearTrail} className="text-sm font-semibold text-stone-500 hover:text-rose-600">Clear trail</button>
+        <button type="button" onClick={clearTrail} className="-ml-3 rounded-full px-3 py-2 text-sm font-semibold text-stone-500 hover:bg-rose-50 hover:text-rose-600">Clear trail</button>
       </div>
 
       <aside className="space-y-4 lg:sticky lg:top-6 lg:h-fit">

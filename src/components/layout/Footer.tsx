@@ -44,7 +44,7 @@ export default function Footer() {
 
             <a
               href="mailto:hello@pujapass.com"
-              className="mt-5 inline-flex items-center gap-2 text-sm transition-colors hover:text-orange-400"
+              className="mt-4 inline-flex items-center gap-2 py-1.5 text-sm transition-colors hover:text-orange-400"
             >
               <Mail className="size-4" />
               Get in touch
@@ -56,12 +56,12 @@ export default function Footer() {
           <div>
             <h2 className="font-semibold text-white">Discover</h2>
 
-            <ul className="mt-4 space-y-3">
+            <ul className="mt-3 space-y-1">
               {exploreLinks.map((link) => (
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-sm text-stone-400 transition-colors hover:text-orange-400"
+                    className="inline-block py-1.5 text-sm text-stone-400 transition-colors hover:text-orange-400"
                   >
                     {link.label}
                   </Link>
@@ -74,12 +74,12 @@ export default function Footer() {
           <div>
             <h2 className="font-semibold text-white">PujaPass</h2>
 
-            <ul className="mt-4 space-y-3">
+            <ul className="mt-3 space-y-1">
               {companyLinks.map((link) => (
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-sm text-stone-400 transition-colors hover:text-orange-400"
+                    className="inline-block py-1.5 text-sm text-stone-400 transition-colors hover:text-orange-400"
                   >
                     {link.label}
                   </Link>

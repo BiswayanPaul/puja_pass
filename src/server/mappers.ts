@@ -8,7 +8,7 @@ import type { Area, CrowdLevel, Pandal, Review, Slot, TicketTier } from "@/types
 // depend on Prisma's generated types.
 
 export const pandalInclude = {
-  club: { select: { name: true } },
+  club: { select: { name: true, verified: true } },
   images: { orderBy: { position: "asc" } },
 } satisfies Prisma.PandalInclude;
 
@@ -33,6 +33,7 @@ export function toPandal(row: PandalRow): Pandal {
     slug: row.slug,
     name: row.name,
     clubName: row.club.name,
+    clubVerified: row.club.verified,
     neighbourhood: row.neighbourhood,
     address: row.address,
     area: row.area as Area,

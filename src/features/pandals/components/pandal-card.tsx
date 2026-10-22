@@ -21,10 +21,12 @@ export function PandalCard({ pandal, featured = false }: PandalCardProps) {
           sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
           className="object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold tracking-wide text-white">
-          <BadgeCheck className="size-3.5" aria-hidden="true" />
-          VERIFIED
-        </span>
+        {pandal.clubVerified && (
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold tracking-wide text-white">
+            <BadgeCheck className="size-3.5" aria-hidden="true" />
+            VERIFIED
+          </span>
+        )}
         {featured && <span className="absolute left-3 top-12 rounded-full bg-orange-400 px-2.5 py-1 text-[11px] font-bold text-stone-950">FEATURED</span>}
         <button type="button" onClick={() => toggleSaved(pandal.id)} aria-label={`${isSaved ? "Remove" : "Save"} ${pandal.name}`} className={isSaved ? "absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-white text-orange-600 shadow backdrop-blur" : "absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-black/25 text-white backdrop-blur transition-colors hover:bg-white hover:text-orange-600"}><Heart className={isSaved ? "size-4 fill-current" : "size-4"} aria-hidden="true" /></button>
         <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-medium text-stone-800">

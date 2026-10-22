@@ -17,6 +17,8 @@ export type Pandal = {
   slug: string;
   name: string;
   clubName: string;
+  /** Whether the club passed PujaPass verification. */
+  clubVerified: boolean;
   neighbourhood: string;
   address: string;
   area: Area;
@@ -156,4 +158,89 @@ export type DailySales = {
   label: string;
   tickets: number;
   revenue: number;
+};
+
+// ─── Platform admin ─────────────────────────────────────────────────────────
+
+export type ApplicationStatus = "pending" | "approved" | "rejected";
+
+export type ClubApplicationSummary = {
+  id: string;
+  clubName: string;
+  registrationNumber: string;
+  area: string;
+  established: number;
+  contactName: string;
+  status: ApplicationStatus;
+  /** ISO timestamp. */
+  submittedAt: string;
+  /** Whole days since submission, for pending applications. */
+  waitingDays: number;
+  hasCertificate: boolean;
+  hasPermission: boolean;
+  /** Name of an existing club that already uses this registration number. */
+  duplicateOfClub: string | null;
+  reviewedAt: string | null;
+};
+
+export type ClubApplicationDetail = ClubApplicationSummary & {
+  address: string;
+  theme: string | null;
+  description: string;
+  expectedFootfall: string;
+  offerings: string[];
+  contactRole: string;
+  email: string;
+  phone: string;
+  /** Uploaded file names; null when not provided. */
+  certificate: string | null;
+  permission: string | null;
+  reviewNotes: string | null;
+  reviewedBy: string | null;
+  submittedBy: { name: string; email: string | null } | null;
+  club: { id: string; name: string; verified: boolean } | null;
+  /** Other applications using the same registration number. */
+  relatedApplications: { id: string; clubName: string; status: ApplicationStatus }[];
+};
+
+/** live: on the public site · draft: club verified, not published · blocked: club not verified. */
+export type AdminPandalStatus = "live" | "draft" | "blocked";
+
+export type AdminPandal = {
+  id: string;
+  slug: string;
+  name: string;
+  area: string;
+  imageSrc: string;
+  imageAlt: string;
+  clubId: string;
+  clubName: string;
+  clubVerified: boolean;
+  status: AdminPandalStatus;
+  featured: boolean;
+  /** Profile fields that must be filled in before publishing. */
+  profileGaps: string[];
+  activeTierCount: number;
+  slotCount: number;
+};
+
+export type AdminClub = {
+  id: string;
+  name: string;
+  registrationNumber: string | null;
+  established: number | null;
+  verified: boolean;
+  verifiedAt: string | null;
+  verificationNote: string | null;
+  owner: string | null;
+  memberCount: number;
+  pandals: { id: string; name: string; slug: string; published: boolean }[];
+};
+
+export type AdminOverview = {
+  applications: Record<ApplicationStatus, number>;
+  overdueApplications: number;
+  clubs: { verified: number; unverified: number };
+  pandals: Record<AdminPandalStatus, number>;
+  readyToPublish: number;
 };

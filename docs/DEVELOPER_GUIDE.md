@@ -55,7 +55,8 @@ Festival days are configured in `src/data/festival.ts` (currently Shashthi 28 Se
 | Checkout & payment | ✅ | Simulated; writes to localStorage | Real bookings + Razorpay (§12.3–12.4) |
 | My bookings, booking detail, cancel | ✅ | Seed mock + localStorage | DB-backed, per user (§12.3) |
 | Login / register / session | ✅ | Mock session in localStorage | Real auth (§12.1) |
-| Club registration (4 steps) | ✅ | Not persisted | `ClubApplication` + admin review (§12.6) |
+| Club registration (4 steps) | ✅ | **PostgreSQL** (`ClubApplication`); documents keep file names only | File uploads (§12.6) |
+| Platform admin (`/admin`) | ✅ | **PostgreSQL**: review applications, verify/revoke clubs, publish/feature pandals | Real admin sign-in (§12.1) |
 | Club dashboard | ✅ | Slots/tiers from DB; KPIs, chart, check-ins are mock | Aggregate from DB (§12.5) |
 | Club pandal profile editor | ✅ | Reads DB; saves only to React state | Server Action + `revalidateTag` (§12.5) |
 | Club tickets & slots | ✅ | Reads DB; edits only in React state | Server Actions (§12.5) |
@@ -207,6 +208,7 @@ Route groups (folders in parentheses) only share layouts; they don't appear in U
 | `(visitor)` | Navbar + Footer, stone background; pages start with a dark `PageHeader` | Trail, checkout, bookings |
 | `(auth)` | Split screen: photo + form, no navbar | Login and registration |
 | `(club)` | `ClubShell` sidebar (dark), fetches the managed pandal server-side | Club admin area |
+| `(admin)` | `AdminShell` sidebar (dark), static | Platform admin area (development only until auth exists) |
 
 | URL | File | Type | Data | Notes |
 | --- | --- | --- | --- | --- |
@@ -223,6 +225,10 @@ Route groups (folders in parentheses) only share layouts; they don't appear in U
 | `/club/pandals` | `(club)/club/pandals/page.tsx` | Server + client form | DB read | Save is local only |
 | `/club/tickets` | `(club)/club/tickets/page.tsx` | Server + client | DB read | Edits are local only |
 | `/club/scanner` | `(club)/club/scanner/page.tsx` | Client | Mock | Camera view is a placeholder |
+| `/admin` | `(admin)/admin/page.tsx` | Static shell + streamed | DB (uncached) | Overview: queue, unverified clubs, drafts ready to publish |
+| `/admin/applications` | `(admin)/admin/applications/page.tsx` | Static shell + streamed | DB | `?status=pending\|approved\|rejected` tabs, oldest pending first |
+| `/admin/applications/[id]` | `(admin)/admin/applications/[id]/page.tsx` | Static shell + streamed | DB | Approve / reject panel |
+| `/admin/clubs`, `/admin/pandals` | `(admin)/admin/…` | Static shell + streamed | DB | Revoke/restore verification; publish/feature |
 
 ---
 
@@ -330,7 +336,13 @@ Commit everything in `prisma/migrations/`. Never edit an applied migration; add 
 
 ### 8.4 Seed (`prisma/seed.ts`)
 
-- Reads `src/data/*`, **deletes all rows**, then inserts: 2 users, 12 clubs (one per pandal), 12 pandals (+ images), 16 tiers, 360 slots, 36 reviews, 4 bookings with 6 passes and payments.
+- Reads `src/data/*`, **deletes all rows**, then inserts: 7 users, 15 clubs, 15 pandals (+ images), 9 club applications, 16 tiers, 360 slots, 36 reviews, 4 bookings with 6 passes and payments.
+- Users: the demo visitor and club admin, a platform admin (`admin@pujapass.example.com`) and four club applicants.
+- Admin edge cases come from `src/data/admin.ts`:
+  - **Pending applications**: complete; missing police permission; no documents from a first-year club; a registration number already used by Sreebhumi; one waiting since early September.
+  - **Reviewed applications**: one rejected (with notes) and three approved.
+  - **Clubs from those approvals**: a verified club whose draft pandal has an incomplete profile; a verified club whose draft is ready to publish; a club whose verification was revoked (pandal hidden).
+- Connects with `DIRECT_URL` when set, since the pooled Supabase URL can time out transactions.
 - **Seeded pandal, tier and slot ids equal the mock ids** (e.g. pandal id = slug = `sreebhumi-sporting-club`). The remaining mock lookups in `src/lib/queries.ts` rely on this. Rows created later get cuids.
 - If you remove `src/data`, rewrite the seed first.
 
@@ -462,12 +474,22 @@ Also enforce per-tier capacity if you need it (today capacity is per slot = sum 
 
 ### 12.6 Club onboarding and platform admin
 
-- `club-register-form.tsx` → Server Action that creates a `ClubApplication` and uploads documents.
-- New admin area (e.g. `(admin)/admin/*`, `PLATFORM_ADMIN` only):
-  - review applications; approving creates the `Club`, a `ClubMember` (OWNER) and a draft `Pandal`
-  - manage featured pandals
-  - handle refunds and disputes
-- Email the club on approval.
+Done:
+
+- `club-register-form.tsx` saves a `ClubApplication` (`src/features/auth/actions.ts`). It refuses a registration number that belongs to a club or to another pending application.
+- Admin area `(admin)/admin/*`. Reads are in `src/server/admin.ts` and writes in `src/features/admin/actions.ts`. Every action calls `requirePlatformAdmin()`. Rules:
+  - **Approve**: needs both documents, or an explicit "verified another way" tick (recorded in the notes). Refused if a club already has the registration number. Creates a verified `Club`, an OWNER `ClubMember` (if the applicant had an account; the user becomes `CLUB_ADMIN`) and an **unpublished** draft `Pandal`.
+  - **Reject**: needs a reason of 10+ characters.
+  - **Revoke** club verification: needs a reason; unpublishes and unfeatures all its pandals. **Restore** does not republish them.
+  - **Publish**: only if the club is verified and the profile has no gaps (`getProfileGaps`). **Feature**: only live pandals.
+- **Public visibility rule**: a pandal is public only when `published` **and** its club is `verified` (`publicPandalWhere` in `src/server/pandals.ts`). The VERIFIED badge reads `Pandal.clubVerified`.
+
+Still to do:
+
+- `requirePlatformAdmin()` only allows access in development (as the seeded admin) until auth exists (§12.1).
+- Store uploaded documents (S3/R2/Supabase Storage); the form keeps only file names today.
+- Let clubs see their own draft pandal in `/club/*` (today the club area uses public queries, so a draft or unverified club's pandal 404s there).
+- Email the club on approval/rejection; an audit log of admin actions; refunds and disputes.
 
 ### 12.7 Other gaps
 
@@ -504,6 +526,8 @@ Also enforce per-tier capacity if you need it (today capacity is per slot = sum 
 | Old trail data is dropped | `use-trail.ts` | Key bumped to `pujapass:trail:v2` when lines became snapshots. |
 | Headings use the system serif | `globals.css` | The mock-up suggests a display serif (e.g. Fraunces/Playfair via `next/font`). |
 | `.dark` theme tokens exist but nothing uses them | `globals.css` | Implement dark mode or remove them. |
+| `/admin` returns 404 outside development | `src/server/admin.ts` | `requirePlatformAdmin()` is a placeholder until real auth. Never deploy it as is. |
+| Club registration has no rate limiting or captcha | `src/features/auth/actions.ts` | Add before launch; the action is public. |
 
 ---
 

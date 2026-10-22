@@ -64,7 +64,7 @@ export default async function ClubDashboardPage() {
       </dl>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <section className="rounded-2xl border border-stone-200 bg-white p-5">
+        <section className="min-w-0 rounded-2xl border border-stone-200 bg-white p-5">
           <h2 className="font-serif text-xl font-semibold text-stone-950">Tickets sold per day</h2>
           <p className="text-sm text-stone-500">Today is highlighted. Hover a bar for revenue.</p>
           <div className="mt-6">
@@ -72,7 +72,7 @@ export default async function ClubDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-stone-200 bg-white p-5">
+        <section className="min-w-0 rounded-2xl border border-stone-200 bg-white p-5">
           <h2 className="font-serif text-xl font-semibold text-stone-950">Sales by pass type</h2>
           <ul className="mt-5 space-y-5">
             {tierSales.map((sale) => {
@@ -104,10 +104,10 @@ export default async function ClubDashboardPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <section className="rounded-2xl border border-stone-200 bg-white p-5">
+        <section className="min-w-0 rounded-2xl border border-stone-200 bg-white p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-serif text-xl font-semibold text-stone-950">Today&apos;s slots</h2>
-            <Link href="/club/tickets" className="text-sm font-semibold text-orange-700">Edit</Link>
+            <Link href="/club/tickets" className="-my-1.5 py-1.5 text-sm font-semibold text-orange-700">Edit</Link>
           </div>
           <ul className="mt-4 space-y-3">
             {todaySlots.map((slot) => {
@@ -125,10 +125,10 @@ export default async function ClubDashboardPage() {
           </ul>
         </section>
 
-        <section className="rounded-2xl border border-stone-200 bg-white p-5">
+        <section className="min-w-0 rounded-2xl border border-stone-200 bg-white p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-serif text-xl font-semibold text-stone-950">Recent check-ins</h2>
-            <Link href="/club/scanner" className="text-sm font-semibold text-orange-700">Scanner</Link>
+            <Link href="/club/scanner" className="-my-1.5 py-1.5 text-sm font-semibold text-orange-700">Scanner</Link>
           </div>
           <ul className="mt-3 divide-y divide-stone-100">
             {recentCheckIns.map((checkIn) => {

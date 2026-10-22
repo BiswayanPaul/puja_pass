@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, FileUp, Loader2 } from "lucide-react";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { areas } from "@/data/pandals";
+import { submitClubApplication } from "@/features/auth/actions";
 import { cn } from "@/lib/utils";
 
 const steps = ["Club", "Pandal", "Contact", "Review"];
@@ -33,8 +34,9 @@ export function ClubRegisterForm() {
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<FormValues>({});
   const [status, setStatus] = useState<"editing" | "submitting" | "submitted">("editing");
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const entries = Object.fromEntries(form) as FormValues;
@@ -45,7 +47,14 @@ export function ClubRegisterForm() {
       return;
     }
     setStatus("submitting");
-    setTimeout(() => setStatus("submitted"), 900);
+    setError(null);
+    const result = await submitClubApplication({ ...values, ...entries });
+    if (result.ok) {
+      setStatus("submitted");
+    } else {
+      setError(result.error);
+      setStatus("editing");
+    }
   };
 
   if (status === "submitted") {
@@ -181,6 +190,12 @@ export function ClubRegisterForm() {
             </dl>
             <Checkbox required label="I confirm I am authorised to represent this club and that the information above is accurate." />
           </>
+        )}
+
+        {error && (
+          <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800">
+            {error}
+          </p>
         )}
 
         <div className="flex items-center justify-between pt-2">

@@ -1,11 +1,15 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { pandalInclude, toPandal, toReview, toSlot, toTicketTier } from "./mappers";
 
 // Pandal reads from the database. Results are cached with `use cache` so pages
 // stay prerendered; call `revalidateTag(tag)` from a Server Action after a club
 // edits its data (see `pandalTags`).
+
+/** A pandal is public only when it is published and its club is verified. */
+const publicPandalWhere = { published: true, club: { verified: true } } satisfies Prisma.PandalWhereInput;
 
 export const pandalTags = {
   list: "pandals",
@@ -21,7 +25,7 @@ export async function getPandals() {
   cacheTag(pandalTags.list);
 
   const rows = await prisma.pandal.findMany({
-    where: { published: true },
+    where: publicPandalWhere,
     include: pandalInclude,
     orderBy: [{ featured: "desc" }, { ratingAverage: "desc" }],
   });
@@ -38,7 +42,7 @@ export async function getPandalSlugs() {
   cacheLife("hours");
   cacheTag(pandalTags.list);
 
-  const rows = await prisma.pandal.findMany({ where: { published: true }, select: { slug: true } });
+  const rows = await prisma.pandal.findMany({ where: publicPandalWhere, select: { slug: true } });
   return rows.map((row) => row.slug);
 }
 
@@ -48,7 +52,7 @@ export async function getPandalBySlug(slug: string) {
   cacheTag(pandalTags.pandal(slug));
 
   const row = await prisma.pandal.findUnique({ where: { slug }, include: pandalInclude });
-  return row?.published ? toPandal(row) : null;
+  return row?.published && row.club.verified ? toPandal(row) : null;
 }
 
 /** Same-area pandals first, then the highest rated. */

@@ -106,9 +106,11 @@ async function PandalDetail({ params }: { params: PageProps<"/pandals/[slug]">["
             <span className="text-white">{pandal.name}</span>
           </nav>
           <div className="mt-6 flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold tracking-wide">
-              <BadgeCheck className="size-3.5" aria-hidden="true" /> VERIFIED
-            </span>
+            {pandal.clubVerified && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold tracking-wide">
+                <BadgeCheck className="size-3.5" aria-hidden="true" /> VERIFIED
+              </span>
+            )}
             <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur">{pandal.category}</span>
             <span className={pandal.entryType === "Free Entry" ? "rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-200" : "rounded-full bg-rose-500/20 px-3 py-1 text-xs font-medium text-rose-200"}>
               {pandal.entryType}

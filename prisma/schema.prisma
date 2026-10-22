@@ -92,7 +92,9 @@ model User {
   bookings     Booking[]
   reviews      Review[]
   savedPandals SavedPandal[]
-  applications ClubApplication[]
+  applications ClubApplication[] @relation("ApplicationSubmitter")
+  /// Applications this platform admin approved or rejected.
+  reviewedApplications ClubApplication[] @relation("ApplicationReviewer")
   checkIns     CheckIn[]
 }
 
@@ -103,6 +105,8 @@ model Club {
   established        Int?
   verified           Boolean   @default(false)
   verifiedAt         DateTime?
+  /// Why the club is not (or no longer) verified, shown to platform admins.
+  verificationNote   String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -140,6 +144,7 @@ model ClubApplication {
   contactRole        String
   email              String
   phone              String
+  /// Uploaded document. Holds the file name until file storage is added.
   certificateUrl     String?
   permissionUrl      String?
   status             ClubApplicationStatus @default(PENDING)
@@ -148,7 +153,9 @@ model ClubApplication {
   reviewedAt         DateTime?
 
   submittedById String?
-  submittedBy   User?   @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  submittedBy   User?   @relation("ApplicationSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  reviewedById  String?
+  reviewedBy    User?   @relation("ApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   /// Set once the application is approved and the club is created.
   clubId        String? @unique
   club          Club?   @relation(fields: [clubId], references: [id], onDelete: SetNull)
