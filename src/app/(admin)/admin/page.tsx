@@ -5,7 +5,8 @@ import { Suspense } from "react";
 import { ArrowRight, BadgeCheck, FileCheck2, ShieldOff, Store } from "lucide-react";
 import { AdminPage, AdminPageHeader, AdminSkeleton, Card, CardTitle } from "@/features/admin/components/admin-ui";
 import { ApplicationFlags } from "@/features/admin/components/application-flags";
-import { getAdminClubs, getAdminOverview, getAdminPandals, getApplications, REVIEW_DUE_DAYS, requirePlatformAdmin } from "@/server/admin";
+import { getAdminClubs, getAdminOverview, getAdminPandals, getApplications, REVIEW_DUE_DAYS } from "@/server/admin";
+import { requirePlatformAdmin } from "@/server/auth/session";
 
 export const metadata: Metadata = { title: "Overview" };
 

@@ -6,7 +6,7 @@ import { useState, type FormEvent } from "react";
 import { ArrowLeft, CreditCard, Landmark, Loader2, Lock, Route, Smartphone } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import { Checkbox, Field, Input, Select } from "@/components/ui/field";
-import { useSession } from "@/features/auth/use-session";
+import { useCurrentUser } from "@/features/auth/use-session";
 import { rememberBooking } from "@/features/bookings/device-bookings";
 import { placeBooking } from "@/features/checkout/actions";
 import { TrailSummary } from "@/features/trail/components/trail-summary";
@@ -23,7 +23,7 @@ const paymentMethods: { value: PaymentMethod; label: string; description: string
 
 export function CheckoutForm() {
   const router = useRouter();
-  const user = useSession();
+  const { user } = useCurrentUser();
   const trail = useTrail();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("UPI");
   const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
@@ -92,13 +92,13 @@ export function CheckoutForm() {
           </p>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Field label="Full name" className="sm:col-span-2">
-              <Input name="name" required autoComplete="name" defaultValue={user?.name} placeholder="Name of the lead visitor" />
+              <Input name="name" required autoComplete="name" defaultValue={user?.name ?? undefined} placeholder="Name of the lead visitor" />
             </Field>
             <Field label="Email" hint="We'll email your passes here.">
-              <Input name="email" type="email" required autoComplete="email" defaultValue={user?.email} placeholder="you@example.com" />
+              <Input name="email" type="email" required autoComplete="email" defaultValue={user?.email ?? undefined} placeholder="you@example.com" />
             </Field>
             <Field label="Mobile number" hint="Only used about your visit.">
-              <Input name="phone" type="tel" required autoComplete="tel" defaultValue={user?.phone} placeholder="+91 98XXX XXXXX" pattern="[+0-9 ]{10,16}" />
+              <Input name="phone" type="tel" required autoComplete="tel" placeholder="+91 98XXX XXXXX" pattern="[+0-9 ]{10,16}" />
             </Field>
           </div>
         </section>

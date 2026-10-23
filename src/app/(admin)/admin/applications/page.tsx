@@ -8,7 +8,8 @@ import { AdminPage, AdminPageHeader, AdminSkeleton } from "@/features/admin/comp
 import { ApplicationFlags, ApplicationStatusPill } from "@/features/admin/components/application-flags";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getApplicationCounts, getApplications, requirePlatformAdmin } from "@/server/admin";
+import { getApplicationCounts, getApplications } from "@/server/admin";
+import { requirePlatformAdmin } from "@/server/auth/session";
 import type { ApplicationStatus } from "@/types";
 
 export const metadata: Metadata = { title: "Applications" };

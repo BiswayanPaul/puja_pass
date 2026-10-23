@@ -6,11 +6,12 @@ import { useEffect, useState } from "react";
 import { ArrowRight, CalendarDays, Ticket } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import StatusBadge from "@/components/shared/StatusBadge";
+import { useCurrentUser } from "@/features/auth/use-session";
 import { useIsClient } from "@/lib/create-store";
 import { formatDate, formatINR, formatPujaDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { BookingStatus, BookingSummary } from "@/types";
-import { getDeviceBookings } from "../actions";
+import { getMyBookings } from "../actions";
 import { useDeviceBookings } from "../device-bookings";
 
 const tabs: { label: string; statuses: BookingStatus[] }[] = [
@@ -19,7 +20,7 @@ const tabs: { label: string; statuses: BookingStatus[] }[] = [
   { label: "Cancelled", statuses: ["cancelled"] },
 ];
 
-function BookingCard({ booking, href }: { booking: BookingSummary; href: string }) {
+function BookingCard({ booking }: { booking: BookingSummary }) {
   return (
     <article className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-shadow hover:shadow-md">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
@@ -42,7 +43,7 @@ function BookingCard({ booking, href }: { booking: BookingSummary; href: string 
         </div>
         <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end">
           <p className="font-serif text-xl font-semibold text-stone-950">{formatINR(booking.total)}</p>
-          <Link href={href} className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-600 hover:text-white">
+          <Link href={booking.href} className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-600 hover:text-white">
             {booking.status === "confirmed" ? "View passes" : "Details"} <ArrowRight className="size-4" />
           </Link>
         </div>
@@ -59,23 +60,24 @@ function BookingCard({ booking, href }: { booking: BookingSummary; href: string 
 export function BookingsList() {
   const isClient = useIsClient();
   const entries = useDeviceBookings();
+  const { user, status } = useCurrentUser();
   const [bookings, setBookings] = useState<BookingSummary[] | null>(null);
   const [active, setActive] = useState(tabs[0].label);
 
   useEffect(() => {
-    if (!isClient) return;
+    // Wait for the session so a signed-in visitor's account bookings are included.
+    if (!isClient || status === "loading") return;
     let current = true;
-    getDeviceBookings(entries)
+    getMyBookings(entries)
       .then((result) => current && setBookings(result))
       .catch(() => current && setBookings([]));
     return () => {
       current = false;
     };
-  }, [entries, isClient]);
+  }, [entries, isClient, status]);
 
   if (!bookings) return <div className="h-64 animate-pulse rounded-2xl bg-stone-200/60" />;
 
-  const keys = new Map(entries.map((entry) => [entry.reference, entry.key]));
   const tab = tabs.find((item) => item.label === active) ?? tabs[0];
   const visible = bookings.filter((booking) => tab.statuses.includes(booking.status));
 
@@ -105,7 +107,7 @@ export function BookingsList() {
 
       <div role="tabpanel" className="mt-6 space-y-4">
         {visible.length ? (
-          visible.map((booking) => <BookingCard key={booking.reference} booking={booking} href={`/bookings/${booking.reference}?k=${keys.get(booking.reference)}`} />)
+          visible.map((booking) => <BookingCard key={booking.reference} booking={booking} />)
         ) : (
           <EmptyState
             icon={Ticket}
@@ -116,7 +118,14 @@ export function BookingsList() {
         )}
       </div>
       <p className="mt-8 text-center text-sm text-stone-500">
-        Showing bookings made on this device. Booked somewhere else? Open the link in your confirmation email.
+        {user ? (
+          "Showing bookings on your account and any made on this device."
+        ) : (
+          <>
+            Showing bookings made on this device.{" "}
+            <Link href="/login?next=/my-bookings" className="font-semibold text-orange-700 hover:text-orange-800">Sign in</Link> to see bookings made with your email anywhere.
+          </>
+        )}
       </p>
     </div>
   );

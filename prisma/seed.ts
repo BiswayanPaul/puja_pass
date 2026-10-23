@@ -56,7 +56,9 @@ async function main() {
     prisma.clubApplication.deleteMany(),
     prisma.clubMember.deleteMany(),
     prisma.club.deleteMany(),
-    prisma.user.deleteMany(),
+    prisma.user.deleteMany(), // also removes sessions and linked accounts
+    prisma.verificationToken.deleteMany(),
+    prisma.rateLimitHit.deleteMany(),
   ]);
 
   await prisma.user.createMany({

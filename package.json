@@ -13,7 +13,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "admin:grant": "bun scripts/grant-admin.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -25,6 +26,7 @@
     "dotenv": "^18.0.8",
     "lucide-react": "^1.59.0",
     "next": "16.4.2",
+    "next-auth": "5.0.0-beta.32",
     "nodemailer": "^10.2.1",
     "pg": "^8.23.1",
     "qrcode": "^1.5.4",

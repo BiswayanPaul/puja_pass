@@ -106,3 +106,16 @@ export function BookingCancelledEmail({ booking }: { booking: Booking }) {
     </Layout>
   );
 }
+
+export function SignInEmail({ url }: { url: string }) {
+  return (
+    <Layout preview="Your PujaPass sign-in link">
+      <Heading style={styles.heading}>Sign in to PujaPass</Heading>
+      <Text style={styles.text}>Click the button to sign in. The link works once and expires in an hour.</Text>
+      <Section style={{ margin: "20px 0", textAlign: "center" }}>
+        <Button href={url} style={styles.button}>Sign in</Button>
+      </Section>
+      <Text style={styles.small}>If you didn&apos;t ask to sign in, you can ignore this email. Nobody can sign in without this link.</Text>
+    </Layout>
+  );
+}

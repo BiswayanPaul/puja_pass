@@ -10,7 +10,7 @@ const exploreLinks = [
 const companyLinks = [
   { label: "About PujaPass", href: "/#about" },
   { label: "Register Your Club", href: "/clubs/register" },
-  { label: "Club Login", href: "/login?role=club" },
+  { label: "Club Login", href: "/login?next=/club/dashboard" },
   { label: "Contact Us", href: "/#contact" },
 ];
 

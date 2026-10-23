@@ -8,7 +8,8 @@ import { AdminPage, AdminSkeleton, Card, CardTitle } from "@/features/admin/comp
 import { ApplicationFlags, ApplicationStatusPill } from "@/features/admin/components/application-flags";
 import { ApplicationReview } from "@/features/admin/components/application-review";
 import { formatDate } from "@/lib/format";
-import { getApplication, requirePlatformAdmin } from "@/server/admin";
+import { getApplication } from "@/server/admin";
+import { requirePlatformAdmin } from "@/server/auth/session";
 import type { ClubApplicationDetail } from "@/types";
 
 export const metadata: Metadata = { title: "Application" };

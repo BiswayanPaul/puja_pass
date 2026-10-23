@@ -1,8 +1,7 @@
 import type { CheckIn, DailySales } from "@/types";
 
-// Analytics for the demo club admin's pandal (Sreebhumi Sporting Club).
+// Sample analytics shown on every club dashboard until real aggregates exist.
 
-export const CLUB_PANDAL_ID = "sreebhumi-sporting-club";
 /** The festival day the dashboard treats as "today". */
 export const CLUB_TODAY = "2026-09-30";
 

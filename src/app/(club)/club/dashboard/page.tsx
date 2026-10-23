@@ -3,11 +3,14 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Clock3, IndianRupee, ScanLine, Ticket, UsersRound, XCircle } from "lucide-react";
 import { ClubPageHeader } from "@/features/club/components/club-shell";
 import { SalesChart } from "@/features/club/components/sales-chart";
-import { CLUB_PANDAL_ID, CLUB_TODAY, dailySales, recentCheckIns, tierSales, todayStats } from "@/data/club";
-import { demoClubAdmin } from "@/data/users";
+import { Suspense } from "react";
+import { CLUB_TODAY, dailySales, recentCheckIns, tierSales, todayStats } from "@/data/club";
+import { ClubAccessNotice, ClubPageSkeleton } from "@/features/club/components/club-access-notice";
 import { formatINR, formatPujaDate, formatTimeRange } from "@/lib/format";
-import { notFound } from "next/navigation";
-import { getPandalBySlug, getSlotsForPandal, getTiersForPandal } from "@/server/pandals";
+import { displayName } from "@/lib/users";
+import { requireClubAccess } from "@/server/auth/session";
+import { getClubPandal } from "@/server/club";
+import { getSlotsForPandal, getTiersForPandal } from "@/server/pandals";
 
 export const metadata: Metadata = { title: "Club dashboard", robots: { index: false } };
 
@@ -17,9 +20,20 @@ const checkInStyles = {
   invalid: { label: "Invalid", icon: XCircle, className: "bg-rose-50 text-rose-700" },
 };
 
-export default async function ClubDashboardPage() {
-  const pandal = await getPandalBySlug(CLUB_PANDAL_ID);
-  if (!pandal) notFound();
+export default function ClubDashboardPage() {
+  return (
+    <Suspense fallback={<ClubPageSkeleton />}>
+      <Dashboard />
+    </Suspense>
+  );
+}
+
+async function Dashboard() {
+  const access = await requireClubAccess(["OWNER", "ADMIN"], "/club/dashboard");
+  if (!access.ok) return <ClubAccessNotice reason={access.reason} />;
+  const pandal = access.pandalId ? await getClubPandal(access.pandalId) : null;
+  if (!pandal) return <ClubAccessNotice reason="no-pandal" />;
+  // TODO: KPIs, the sales chart and check-ins below are still sample data (src/data/club.ts).
   const [todaySlots, tiers] = await Promise.all([getSlotsForPandal(pandal.id, CLUB_TODAY), getTiersForPandal(pandal.id)]);
   const totalTickets = dailySales.reduce((total, day) => total + day.tickets, 0);
   const totalRevenue = dailySales.reduce((total, day) => total + day.revenue, 0);
@@ -36,7 +50,7 @@ export default async function ClubDashboardPage() {
   return (
     <div className="space-y-6 p-4 sm:p-6 lg:p-8">
       <ClubPageHeader
-        title={`Namaskar, ${demoClubAdmin.name.split(" ")[0]}`}
+        title={`Namaskar, ${displayName(access.user).split(" ")[0]}`}
         description={`Here's how your Puja is doing · ${formatPujaDate(CLUB_TODAY)}`}
         actions={
           <>

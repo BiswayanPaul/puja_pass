@@ -160,6 +160,8 @@ export type BookingSummary = {
   passCount: number;
   visitors: number;
   firstStartTime: string;
+  /** Link to the booking page, with its manage key. */
+  href: string;
 };
 
 export type UserRole = "visitor" | "club_admin";
@@ -274,4 +276,16 @@ export type AdminOverview = {
   clubs: { verified: number; unverified: number };
   pandals: Record<AdminPandalStatus, number>;
   readyToPublish: number;
+};
+
+// ─── Session ────────────────────────────────────────────────────────────────
+
+/** The club a signed-in member manages (their first membership). */
+export type SessionClub = {
+  id: string;
+  name: string;
+  verified: boolean;
+  role: "OWNER" | "ADMIN" | "SCANNER";
+  /** The club's first pandal, if it has one. */
+  pandal: { slug: string; published: boolean } | null;
 };

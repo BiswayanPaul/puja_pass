@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { bookingShareText, whatsappShareUrl } from "@/lib/share";
 import { bookingUrl, passQrUrl } from "../booking-links";
 import { bookingInclude, toBooking } from "../bookings";
-import { BookingCancelledEmail, BookingConfirmedEmail } from "./booking-emails";
+import { BookingCancelledEmail, BookingConfirmedEmail } from "./emails";
 import { sendEmail } from "./email";
 
 // The notification outbox. Write rows with `bookingNotification()` inside the

@@ -5,7 +5,8 @@ import { BadgeCheck, ShieldOff } from "lucide-react";
 import { AdminPage, AdminPageHeader, AdminSkeleton, Pill } from "@/features/admin/components/admin-ui";
 import { ClubVerificationControl } from "@/features/admin/components/club-verification-control";
 import { formatDate } from "@/lib/format";
-import { getAdminClubs, requirePlatformAdmin } from "@/server/admin";
+import { getAdminClubs } from "@/server/admin";
+import { requirePlatformAdmin } from "@/server/auth/session";
 
 export const metadata: Metadata = { title: "Clubs" };
 

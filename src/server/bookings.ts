@@ -3,8 +3,8 @@ import QRCode from "qrcode";
 import type { Prisma } from "@/generated/prisma/client";
 import type { BookingStatus as DbBookingStatus, PassStatus as DbPassStatus, PaymentMethod as DbPaymentMethod } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
-import type { Booking, BookingStatus, BookingSummary, PassCheck, PassStatus, PaymentMethod } from "@/types";
-import { passQrUrl, verifyBookingKey } from "./booking-links";
+import type { Booking, BookingAccess, BookingStatus, BookingSummary, PassCheck, PassStatus, PaymentMethod } from "@/types";
+import { bookingPath, passQrUrl, verifyBookingKey } from "./booking-links";
 
 // Booking reads. Bookings are private, so these are never cached: call them
 // under <Suspense>, and only after checking the booking key.
@@ -81,20 +81,28 @@ export async function toBooking(row: BookingRow): Promise<Booking> {
   };
 }
 
-/** The booking, if the key opens it, with the access the key grants. */
-export async function getBookingWithKey(reference: string, key: string | undefined) {
-  const access = verifyBookingKey(reference, key);
-  if (!access) return null;
+/**
+ * The booking, if the key opens it or the signed-in user owns it, with the
+ * access granted: owners always get "manage".
+ */
+export async function getBookingForViewer(reference: string, key: string | undefined, userId: string | undefined) {
+  const keyAccess = verifyBookingKey(reference, key);
+  if (!keyAccess && !userId) return null;
   const row = await prisma.booking.findUnique({ where: { reference }, include: bookingInclude });
-  return row ? { booking: await toBooking(row), access } : null;
+  if (!row) return null;
+  const access: BookingAccess | null = userId && row.userId === userId ? "manage" : keyAccess;
+  return access ? { booking: await toBooking(row), access } : null;
 }
 
-/** Summaries for the bookings remembered on this device; entries with a wrong key are skipped. */
-export async function getBookingSummaries(entries: { reference: string; key: string }[]): Promise<BookingSummary[]> {
+/**
+ * Summaries for "My bookings": the signed-in user's bookings plus those
+ * remembered on this device (entries with a wrong key are skipped).
+ */
+export async function getBookingSummaries(entries: { reference: string; key: string }[], userId?: string): Promise<BookingSummary[]> {
   const references = entries.filter((entry) => verifyBookingKey(entry.reference, entry.key)).map((entry) => entry.reference);
-  if (!references.length) return [];
+  if (!references.length && !userId) return [];
   const rows = await prisma.booking.findMany({
-    where: { reference: { in: references } },
+    where: { OR: [{ reference: { in: references } }, ...(userId ? [{ userId }] : [])] },
     include: bookingInclude,
     orderBy: { createdAt: "desc" },
   });
@@ -110,6 +118,7 @@ export async function getBookingSummaries(entries: { reference: string; key: str
       passCount: row.passes.length,
       visitors: row.passes.reduce((total, pass) => total + pass.quantity, 0),
       firstStartTime: row.passes[0]?.slot.startTime ?? "",
+      href: bookingPath(row.reference, "manage"),
     };
   });
 }

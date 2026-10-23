@@ -55,9 +55,9 @@ Festival days are configured in `src/data/festival.ts` (currently Shashthi 28 Se
 | Checkout & payment | ✅ | **PostgreSQL** booking with atomic seat reservation; payment simulated | Razorpay + seat holds (§12.3–12.4) |
 | Booking emails | ✅ | Resend via the `Notification` outbox (confirmation + cancellation) | Own sending domain; WhatsApp after Meta verification |
 | My bookings, booking detail, cancel | ✅ | **PostgreSQL**, opened with signed links; "My bookings" lists bookings made on this device | Per-user list after auth (§12.1) |
-| Login / register / session | ✅ | Mock session in localStorage | Real auth (§12.1) |
+| Login / register / session | ✅ | **Auth.js v5**: Google + email link, database sessions | Phone/WhatsApp OTP later |
 | Club registration (4 steps) | ✅ | **PostgreSQL** (`ClubApplication`); documents keep file names only | File uploads (§12.6) |
-| Platform admin (`/admin`) | ✅ | **PostgreSQL**: review applications, verify/revoke clubs, publish/feature pandals | Real admin sign-in (§12.1) |
+| Platform admin (`/admin`) | ✅ | **PostgreSQL**: review applications, verify/revoke clubs, publish/feature pandals; `PLATFORM_ADMIN` only | Audit log |
 | Club dashboard | ✅ | Slots/tiers from DB; KPIs, chart, check-ins are mock | Aggregate from DB (§12.5) |
 | Club pandal profile editor | ✅ | Reads DB; saves only to React state | Server Action + `revalidateTag` (§12.5) |
 | Club tickets & slots | ✅ | Reads DB; edits only in React state | Server Actions (§12.5) |
@@ -134,16 +134,16 @@ DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/puja_pass?schema=public"
 | `db:studio` | Prisma Studio GUI |
 | `db:generate` | Regenerate the client into `src/generated/prisma` |
 
-### Demo accounts (mock login)
+### Signing in locally
 
-The login form is pre-filled; any password works.
+Sign-in is passwordless (§7.4): Google, or a one-time link emailed through the configured email provider. Seeded accounts use `example.com` addresses that can't receive mail, so for local testing either:
 
-| Role | Email | Lands on |
-| --- | --- | --- |
-| Visitor | `riya@example.com` | `/my-bookings` |
-| Club admin (Sreebhumi Sporting Club) | `admin@sreebhumi.example.com` | `/club/dashboard` |
+- sign in with your own email (an email provider must be configured, see §7.3), then give it a role: `bun run admin:grant you@example.com` for platform admin, or add a `ClubMember` row in Prisma Studio for club access;
+- or set up Google sign-in (`AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`).
 
-`/login?role=club` opens the club tab. `/login?next=/checkout` redirects back after login. The club area is browsable without logging in (falls back to the demo admin).
+Without an email provider, development only logs that an email would be sent, so email-link sign-in can't complete.
+
+`/login?next=/checkout` returns there after sign-in.
 
 ### Scanner demo codes
 
@@ -208,7 +208,7 @@ Route groups (folders in parentheses) only share layouts; they don't appear in U
 | `(marketing)` | Overlay Navbar + Footer | Public discovery pages |
 | `(visitor)` | Navbar + Footer, stone background; pages start with a dark `PageHeader` | Trail, checkout, bookings |
 | `(auth)` | Split screen: photo + form, no navbar | Login and registration |
-| `(club)` | `ClubShell` sidebar (dark), fetches the managed pandal server-side | Club admin area |
+| `(club)` | `ClubShell` sidebar (dark), static; club name/role from the client session | Club area; each page checks `requireClubAccess()` |
 | `(admin)` | `AdminShell` sidebar (dark), static | Platform admin area (development only until auth exists) |
 
 | URL | File | Type | Data | Notes |
@@ -220,7 +220,8 @@ Route groups (folders in parentheses) only share layouts; they don't appear in U
 | `/checkout` | `(visitor)/checkout/page.tsx` | Client form | localStorage | Simulated payment, then `/bookings/{id}?new=1` |
 | `/my-bookings` | `(visitor)/my-bookings/page.tsx` | Client | Mock + localStorage | Upcoming / Past / Cancelled tabs |
 | `/bookings/[bookingId]` | `(visitor)/bookings/[bookingId]/page.tsx` | Static shell + client | Mock + localStorage | Reads id via `useParams` inside Suspense |
-| `/login`, `/register` | `(auth)/…` | Client | Mock session | |
+| `/login`, `/register` | `(auth)/…` | Static + client form | Auth.js | Same form; `?next=` return path, `?error=` messages |
+| `/login/check-email` | `(auth)/login/check-email/page.tsx` | Static | — | Shown after an email link is sent |
 | `/clubs/register` | `(auth)/clubs/register/page.tsx` | Client | Not persisted | 4-step wizard |
 | `/club/dashboard` | `(club)/club/dashboard/page.tsx` | Server | DB (slots, tiers) + mock KPIs | Chart: `features/club/components/sales-chart.tsx` |
 | `/club/pandals` | `(club)/club/pandals/page.tsx` | Server + client form | DB read | Save is local only |
@@ -268,7 +269,6 @@ All client stores use `createPersistentStore(key, initial)` in `src/lib/create-s
 | --- | --- | --- |
 | Trail (cart) | `pujapass:trail:v2` | `useTrail()`, `addToTrail`, `updateTrailQuantity`, `removeFromTrail`, `clearTrail` |
 | Created/cancelled bookings | `pujapass:bookings` | `useBookings()`, `useBooking(id)`, `createBooking`, `cancelBooking` |
-| Mock session | `pujapass:session` | `useSession()`, `signIn(role)`, `signOut()` |
 | Saved pandals | `pujapass:saved-pandals` | `useSavedPandals()` |
 
 Notes:
@@ -312,10 +312,39 @@ Notes:
   - **SMTP** (`SMTP_USER` + `SMTP_PASS`, default host `smtp.gmail.com:465`), used today with a Gmail App password: free, ~500 recipients/day, sent from that Gmail address (`EMAIL_FROM` must be it). Over the limit, Gmail refuses sends; the outbox retries, then marks them FAILED.
   - **Resend** (`RESEND_API_KEY`): switch to it once a domain is verified. Resend can't send from `gmail.com` or any unverified domain.
   - Neither, in development: emails are only logged. `EMAIL_REDIRECT_TO` (testing) sends everything to one inbox.
-  - Templates are React Email components in `booking-emails.tsx`; QR codes are inline attachments (`cid:`).
+  - Templates are React Email components in `emails.tsx`; QR codes are inline attachments (`cid:`).
 - WhatsApp is not sent yet: Meta restricted the WhatsApp Business Account until **business verification**. Visitors share the view link with the WhatsApp share button instead.
 
-**Club area:** `(club)/layout.tsx` loads the managed pandal (`CLUB_PANDAL_ID` in `src/data/club.ts`) and passes `{ name, clubName, slug }` into `ClubShell`. Pages fetch tiers and slots by the pandal's DB id.
+**Club area:** each page calls `requireClubAccess(roles)` and loads the member's own pandal with `getClubPandal()` (drafts included). Dashboard KPIs, chart and check-ins are still sample data from `src/data/club.ts`.
+
+### 7.4 Authentication and access
+
+Auth.js v5 (`next-auth@5.0.0-beta`) in `src/auth.ts`:
+
+- **Sign-in:** passwordless. "Continue with Google" (only when `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` are set) or a one-time email link sent by `sendSignInEmail()` through our email provider. Signing in creates the account; `/register` is the same form.
+- **Sessions:** stored in the `Session` table (database strategy), 30 days, revocable. Our own adapter (`src/server/auth/adapter.ts`) talks to the Prisma 7 client; the official adapter only supports Prisma ≤ 6.
+- **Session contents** (`callbacks.session`): `id`, `isPlatformAdmin` (from `User.role`), and `club` (the first `ClubMember` membership: club, role, first pandal).
+- **Guest bookings** with the same email are attached to the account on every sign-in (`events.signIn`); emails are verified by both providers.
+- **Google + email link with the same address** share one account (`allowDangerousEmailAccountLinking`, safe because Google verifies emails).
+
+Access is checked in two layers:
+
+1. `src/proxy.ts`: no session cookie on `/admin/*` or `/club/*` → redirect to `/login?next=…`. It never reads the database.
+2. `src/server/auth/session.ts` (the real checks, called by pages inside `<Suspense>` and by every Server Action):
+   - `getCurrentUser()`; `requireUser(returnTo)`;
+   - `requirePlatformAdmin()`: anyone else gets a 404;
+   - `requireClubAccess(roles, returnTo)`: OWNER/ADMIN for dashboard, profile, tickets; plus SCANNER for `/club/scanner`. Returns a reason instead of throwing so pages can explain (`ClubAccessNotice`).
+
+| Area | Access |
+| --- | --- |
+| Pandals, trail, checkout, pass check, booking link with key | Public (guest checkout); signed-in users get bookings attached and prefilled forms |
+| `/bookings/[ref]` without a key | The booking's owner (signed in) |
+| `/my-bookings` | Public: this device's bookings, plus the account's when signed in |
+| `/clubs/register` (submitting) | Signed in; the applicant becomes OWNER on approval |
+| `/club/*` | Club members by role |
+| `/admin/*` and admin actions | `PLATFORM_ADMIN` (`bun run admin:grant <email>`) |
+
+The UI reads the session in the browser (`useCurrentUser()` in `src/features/auth/use-session.ts`, via `SessionProvider` in the root layout), so public pages stay static. Never rely on it for access.
 
 ---
 
@@ -389,7 +418,7 @@ Commit everything in `prisma/migrations/`. Never edit an applied migration; add 
 | `slots.ts` | Deterministic generated availability | Seed only |
 | `reviews.ts` | 3 reviews per pandal | Seed only |
 | `bookings.ts` | 4 bookings for the demo visitor | `useBookings`, `/bookings/[id]` static params |
-| `users.ts` | Demo visitor + club admin | Mock session, login form, club shell |
+| `users.ts` | Demo visitor + club admin | Seed only |
 | `club.ts` | `CLUB_PANDAL_ID`, `CLUB_TODAY`, KPI numbers, daily sales, check-ins, scanner passes | Club dashboard KPIs/chart, scanner, club layout |
 
 `src/lib/queries.ts` and the mock bookings store were removed; `src/data/bookings.ts` is now only read by the seed.
@@ -433,17 +462,14 @@ Commit everything in `prisma/migrations/`. Never edit an applied migration; add 
 
 In dependency order. Each item lists the files to touch.
 
-### 12.1 Authentication (blocks almost everything)
+### 12.1 Authentication
 
-- Pick a library: Auth.js or Better Auth (both have Prisma adapters). Phone OTP is likely the primary method for Indian users, with email as a fallback.
-- Add the library's tables to `schema.prisma` (sessions/accounts/verification), keeping `User.role`.
-- Replace `src/features/auth/use-session.ts` and the login/register forms with real flows. Add forgot-password and OTP screens.
-- Protect routes in **`proxy.ts`**:
-  - `/club/*` needs a `ClubMember` of the pandal's club.
-  - `/my-bookings`, `/bookings/*` and `/checkout` need a signed-in visitor.
-  - Platform admin routes need `PLATFORM_ADMIN`.
-- Replace `CLUB_PANDAL_ID` (in `(club)/layout.tsx` and the club pages) with "the pandal(s) of the signed-in member's club".
-- Navbar: the session will come from the server. Render the account area under `<Suspense>` with a logged-out fallback, so the shell stays static.
+Done (see §7.4). Still to do:
+
+- Phone sign-in (WhatsApp authentication templates avoid SMS DLT registration) once Meta verification passes.
+- An account page: set your name and phone number; list and sign out of other sessions.
+- Club members of several clubs: a club switcher (`requireClubAccess` uses the first membership).
+- Team management for club owners: invite ADMIN/SCANNER members.
 
 ### 12.2 Bookings on the database
 
@@ -513,9 +539,7 @@ Done:
 
 Still to do:
 
-- `requirePlatformAdmin()` only allows access in development (as the seeded admin) until auth exists (§12.1).
 - Store uploaded documents (S3/R2/Supabase Storage); the form keeps only file names today.
-- Let clubs see their own draft pandal in `/club/*` (today the club area uses public queries, so a draft or unverified club's pandal 404s there).
 - Email the club on approval/rejection; an audit log of admin actions; refunds and disputes.
 
 ### 12.7 Other gaps
@@ -554,8 +578,7 @@ Still to do:
 | Old trail data is dropped | `use-trail.ts` | Key bumped to `pujapass:trail:v2` when lines became snapshots. |
 | Headings use the system serif | `globals.css` | The mock-up suggests a display serif (e.g. Fraunces/Playfair via `next/font`). |
 | `.dark` theme tokens exist but nothing uses them | `globals.css` | Implement dark mode or remove them. |
-| `/admin` returns 404 outside development | `src/server/admin.ts` | `requirePlatformAdmin()` is a placeholder until real auth. Never deploy it as is. |
-| Club registration has no rate limiting or captcha | `src/features/auth/actions.ts` | Add before launch; the action is public. |
+| No captcha on sign-in or checkout | `src/server/rate-limit.ts` | Rate limits cap abuse (sign-in emails 3/15 min per address, 20/hour per IP; bookings 5/hour per email, 20/hour per IP). Add a captcha (e.g. Cloudflare Turnstile) if abuse appears. |
 
 ---
 

@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Suspense } from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import { LayoutDashboard, LogOut, Menu, Route, Sparkles, Ticket, UserRound } from "lucide-react";
+import type { Session } from "next-auth";
+import { LayoutDashboard, LogOut, Menu, Route, ScanLine, ShieldCheck, Sparkles, Ticket, UserRound } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { displayName } from "@/lib/users";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/shared/Logo";
-import { signOut, useSession } from "@/features/auth/use-session";
+import { signOut, useCurrentUser } from "@/features/auth/use-session";
 import { useTrail } from "@/features/trail/use-trail";
 import {
   Sheet,
@@ -35,16 +37,25 @@ function initials(name: string) {
   return name.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase();
 }
 
-function UserMenu() {
-  const router = useRouter();
-  const user = useSession();
-  if (!user) return null;
-  const items = user.role === "club_admin"
-    ? [{ label: "Club dashboard", href: "/club/dashboard", icon: LayoutDashboard }]
-    : [
-        { label: "My bookings", href: "/my-bookings", icon: Ticket },
-        { label: "My Puja trail", href: "/trail", icon: Route },
-      ];
+type SessionUser = Session["user"];
+
+/** Account links for the signed-in user; the server re-checks access on each page. */
+function accountLinks(user: SessionUser) {
+  return [
+    { label: "My bookings", href: "/my-bookings", icon: Ticket },
+    { label: "My Puja trail", href: "/trail", icon: Route },
+    ...(user.club?.role === "SCANNER"
+      ? [{ label: "Entry scanner", href: "/club/scanner", icon: ScanLine }]
+      : user.club
+        ? [{ label: "Club dashboard", href: "/club/dashboard", icon: LayoutDashboard }]
+        : []),
+    ...(user.isPlatformAdmin ? [{ label: "Admin", href: "/admin", icon: ShieldCheck }] : []),
+  ];
+}
+
+function UserMenu({ user }: { user: SessionUser }) {
+  const items = accountLinks(user);
+  const name = displayName(user);
 
   return (
     <MenuPrimitive.Root>
@@ -52,13 +63,13 @@ function UserMenu() {
         aria-label="Account menu"
         className="flex size-10 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-800 ring-2 ring-white/40 transition hover:ring-orange-300"
       >
-        {initials(user.name)}
+        {initials(name)}
       </MenuPrimitive.Trigger>
       <MenuPrimitive.Portal>
         <MenuPrimitive.Positioner sideOffset={8} align="end" className="z-50">
           <MenuPrimitive.Popup className="w-60 rounded-xl border border-stone-200 bg-white p-1.5 text-sm text-stone-700 shadow-xl outline-none transition data-ending-style:opacity-0 data-starting-style:opacity-0">
             <div className="px-3 py-2">
-              <p className="font-semibold text-stone-950">{user.name}</p>
+              <p className="font-semibold text-stone-950">{name}</p>
               <p className="truncate text-xs text-stone-500">{user.email}</p>
             </div>
             <MenuPrimitive.Separator className="my-1 h-px bg-stone-100" />
@@ -74,10 +85,7 @@ function UserMenu() {
             ))}
             <MenuPrimitive.Separator className="my-1 h-px bg-stone-100" />
             <MenuPrimitive.Item
-              onClick={() => {
-                signOut();
-                router.push("/");
-              }}
+              onClick={() => signOut()}
               className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 outline-none data-highlighted:bg-rose-50 data-highlighted:text-rose-700"
             >
               <LogOut className="size-4" aria-hidden="true" />
@@ -128,7 +136,8 @@ function ActiveDesktopLinks() {
 }
 
 export default function Navbar() {
-  const user = useSession();
+  // While the session loads, the account area stays empty instead of flashing "Login".
+  const { user, status } = useCurrentUser();
 
   return (
     <header className="absolute inset-x-0 top-0 z-50 bg-linear-to-b from-black/65 to-transparent">
@@ -149,8 +158,8 @@ export default function Navbar() {
         <div className="hidden items-center gap-3 lg:flex">
           <TrailButton />
           {user ? (
-            <UserMenu />
-          ) : (
+            <UserMenu user={user} />
+          ) : status === "loading" ? null : (
             <>
               <Link
                 href="/login"
@@ -174,7 +183,7 @@ export default function Navbar() {
         {/* Mobile navigation */}
         <div className="flex items-center gap-2 lg:hidden">
           <TrailButton />
-          {user && <UserMenu />}
+          {user && <UserMenu user={user} />}
           <Sheet>
             <SheetTrigger
               render={
@@ -199,7 +208,7 @@ export default function Navbar() {
                 aria-label="Mobile navigation"
                 className="mt-6 flex flex-col gap-1"
               >
-                {[...links, ...(user?.role === "visitor" ? [{ label: "My Bookings", href: "/my-bookings" }] : []), ...(user?.role === "club_admin" ? [{ label: "Club Dashboard", href: "/club/dashboard" }] : [])].map((link) => (
+                {[...links, ...(user ? accountLinks(user).filter((link) => link.href !== "/trail") : [])].map((link) => (
                   <SheetClose
                     key={link.label}
                     render={

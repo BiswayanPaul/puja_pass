@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, FileUp, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, FileUp, Loader2, LogIn } from "lucide-react";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { areas } from "@/data/pandals";
 import { submitClubApplication } from "@/features/auth/actions";
+import { useCurrentUser } from "@/features/auth/use-session";
 import { cn } from "@/lib/utils";
 
 const steps = ["Club", "Pandal", "Contact", "Review"];
@@ -35,6 +36,7 @@ export function ClubRegisterForm() {
   const [values, setValues] = useState<FormValues>({});
   const [status, setStatus] = useState<"editing" | "submitting" | "submitted">("editing");
   const [error, setError] = useState<string | null>(null);
+  const { user, status: sessionStatus } = useCurrentUser();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -56,6 +58,27 @@ export function ClubRegisterForm() {
       setStatus("editing");
     }
   };
+
+  // The applicant's account becomes the club's owner once approved, so sign-in comes first.
+  if (sessionStatus === "loading") return <div className="h-120 animate-pulse rounded-2xl bg-stone-200/60" />;
+  if (!user) {
+    return (
+      <div>
+        <p className="text-sm font-bold tracking-[0.16em] text-orange-600">FOR PUJA CLUBS</p>
+        <h1 className="mt-2 font-serif text-4xl font-semibold tracking-tight text-stone-950">Register your club</h1>
+        <p className="mt-2 text-stone-600">Offer authorised timed entry, manage capacity and check visitors in with QR codes.</p>
+        <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-6">
+          <h2 className="font-semibold text-stone-950">First, sign in</h2>
+          <p className="mt-1 text-sm text-stone-600">
+            Your account becomes the club&apos;s owner once PujaPass approves the application, so you can manage the pandal and add your team.
+          </p>
+          <Link href="/login?next=/clubs/register" className="mt-5 inline-flex items-center gap-2 rounded-full bg-orange-600 px-6 py-3 text-sm font-bold text-white hover:bg-orange-700">
+            <LogIn className="size-4" aria-hidden="true" /> Sign in to continue
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (status === "submitted") {
     return (
@@ -81,7 +104,7 @@ export function ClubRegisterForm() {
           ))}
         </ol>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link href="/club/dashboard" className="rounded-full bg-orange-600 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-700">Preview the club dashboard</Link>
+          <Link href="/my-bookings" className="rounded-full bg-orange-600 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-700">Go to my account</Link>
           <Link href="/" className="rounded-full border border-stone-300 px-5 py-3 text-sm font-semibold text-stone-800 hover:bg-white">Back to home</Link>
         </div>
       </div>
@@ -157,9 +180,9 @@ export function ClubRegisterForm() {
         {step === 2 && (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Contact person"><Input name="contactName" required autoComplete="name" defaultValue={values.contactName} /></Field>
+              <Field label="Contact person"><Input name="contactName" required autoComplete="name" defaultValue={values.contactName ?? user.name ?? undefined} /></Field>
               <Field label="Role in club"><Input name="contactRole" required defaultValue={values.contactRole} placeholder="Secretary" /></Field>
-              <Field label="Email"><Input name="email" type="email" required autoComplete="email" defaultValue={values.email} /></Field>
+              <Field label="Email"><Input name="email" type="email" required autoComplete="email" defaultValue={values.email ?? user.email ?? undefined} /></Field>
               <Field label="Mobile number"><Input name="phone" type="tel" required autoComplete="tel" defaultValue={values.phone} pattern="[+0-9 ]{10,16}" /></Field>
             </div>
             <FileField name="certificate" label="Society registration certificate" value={values.certificate} />
@@ -204,7 +227,7 @@ export function ClubRegisterForm() {
               <ArrowLeft className="size-4" /> Back
             </button>
           ) : (
-            <Link href="/login?role=club" className="text-sm font-semibold text-orange-700">Already registered? Log in</Link>
+            <Link href="/club/dashboard" className="text-sm font-semibold text-orange-700">Already approved? Go to your club</Link>
           )}
           <button type="submit" disabled={status === "submitting"} className="inline-flex items-center gap-2 rounded-full bg-orange-600 px-6 py-3 text-sm font-bold text-white hover:bg-orange-700 disabled:opacity-70">
             {status === "submitting" && <Loader2 className="size-4 animate-spin" />}

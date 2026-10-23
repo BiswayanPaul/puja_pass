@@ -7,9 +7,11 @@ import { CONVENIENCE_FEE_PER_PASS, MAX_PASSES_PER_SLOT } from "@/data/festival";
 import { Prisma } from "@/generated/prisma/client";
 import type { PaymentMethod as DbPaymentMethod } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/server/auth/session";
 import { bookingKey, bookingPath } from "@/server/booking-links";
 import { bookingNotification, deliverSoon, NotificationTemplate } from "@/server/notifications";
 import { pandalTags } from "@/server/pandals";
+import { clientIp, HOUR, rateLimit } from "@/server/rate-limit";
 import type { PaymentMethod } from "@/types";
 
 export type PlaceBookingResult =
@@ -87,6 +89,12 @@ export async function placeBooking(input: z.input<typeof bookingSchema>): Promis
     return { ok: false, error: "Prices have changed since you added these slots. Review your trail and try again." };
   }
 
+  // Every booking emails the visitor from our account, so cap how often anyone can book.
+  // The per-IP cap is generous because Indian mobile networks share IPs widely.
+  const allowed = (await rateLimit(`checkout:ip:${await clientIp()}`, 20, HOUR)) && (await rateLimit(`checkout:email:${contact.email}`, 5, HOUR));
+  if (!allowed) return { ok: false, error: "Too many bookings in a short time. Please wait a while and try again." };
+  const user = await getCurrentUser();
+
   // Seats per slot across pass types: capacity is shared by the whole slot.
   const seatsBySlot = new Map<string, number>();
   for (const line of priced) seatsBySlot.set(line.slotId, (seatsBySlot.get(line.slotId) ?? 0) + line.quantity);
@@ -117,7 +125,7 @@ export async function placeBooking(input: z.input<typeof bookingSchema>): Promis
             fees,
             total: subtotal + fees,
             paymentMethod: paymentMethods[paymentMethod],
-            // TODO(auth): set userId for signed-in visitors.
+            userId: user?.id,
             passes: {
               create: priced.map((line) => ({
                 code: `${line.slot.pandal.name.replace(/[^a-z]/gi, "").slice(0, 3).toUpperCase()}-${line.slot.date.toISOString().slice(8, 10)}${line.slot.date.toISOString().slice(5, 7)}-${randomCode(4)}`,

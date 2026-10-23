@@ -5,7 +5,8 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import type { CrowdLevel } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
-import { getProfileGaps, requirePlatformAdmin } from "@/server/admin";
+import { getProfileGaps } from "@/server/admin";
+import { requirePlatformAdmin } from "@/server/auth/session";
 import { pandalTags } from "@/server/pandals";
 
 export type ActionResult =

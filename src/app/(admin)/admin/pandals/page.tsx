@@ -6,7 +6,8 @@ import { Suspense } from "react";
 import { CircleDashed, Eye, ShieldOff, Star, TriangleAlert } from "lucide-react";
 import { AdminPage, AdminPageHeader, AdminSkeleton, Pill } from "@/features/admin/components/admin-ui";
 import { PandalControls } from "@/features/admin/components/pandal-controls";
-import { getAdminPandals, requirePlatformAdmin } from "@/server/admin";
+import { getAdminPandals } from "@/server/admin";
+import { requirePlatformAdmin } from "@/server/auth/session";
 import type { AdminPandalStatus } from "@/types";
 
 export const metadata: Metadata = { title: "Pandals" };

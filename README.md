@@ -45,14 +45,9 @@ bun run db:seed             # load sample pandals, slots and bookings
 bun run dev                 # http://localhost:3000
 ```
 
-### Demo accounts
+### Signing in
 
-Login is mocked: the form is pre-filled and any password works.
-
-| Role | Email |
-| --- | --- |
-| Visitor | `riya@example.com` |
-| Club admin | `admin@sreebhumi.example.com` (or open `/login?role=club`) |
+Sign-in is passwordless (Google or an emailed link) via Auth.js. Sign in with your own email, then make yourself a platform admin with `bun run admin:grant you@example.com`. See the developer guide, §7.4.
 
 ## Scripts
 

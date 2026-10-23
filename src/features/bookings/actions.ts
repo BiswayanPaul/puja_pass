@@ -3,6 +3,7 @@
 import { refresh, updateTag } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/server/auth/session";
 import { verifyBookingKey } from "@/server/booking-links";
 import { getBookingSummaries } from "@/server/bookings";
 import { bookingNotification, deliverSoon, NotificationTemplate } from "@/server/notifications";
@@ -62,8 +63,9 @@ export async function cancelBooking(reference: string, key: string): Promise<Can
 
 const deviceBookingsSchema = z.array(z.object({ reference: z.string().max(20), key: z.string().max(40) })).max(50);
 
-/** Summaries of the bookings this browser remembers (see `device-bookings.ts`). */
-export async function getDeviceBookings(entries: { reference: string; key: string }[]): Promise<BookingSummary[]> {
+/** "My bookings": the signed-in user's bookings plus those this browser remembers (see `device-bookings.ts`). */
+export async function getMyBookings(entries: { reference: string; key: string }[]): Promise<BookingSummary[]> {
   const parsed = deviceBookingsSchema.safeParse(entries);
-  return parsed.success ? getBookingSummaries(parsed.data) : [];
+  const user = await getCurrentUser();
+  return getBookingSummaries(parsed.success ? parsed.data : [], user?.id);
 }

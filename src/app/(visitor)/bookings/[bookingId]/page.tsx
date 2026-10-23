@@ -5,8 +5,9 @@ import { SearchX } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import PageHeader from "@/components/shared/PageHeader";
 import { BookingDetail } from "@/features/bookings/components/booking-detail";
-import { bookingUrl } from "@/server/booking-links";
-import { getBookingWithKey } from "@/server/bookings";
+import { getCurrentUser } from "@/server/auth/session";
+import { bookingKey, bookingUrl } from "@/server/booking-links";
+import { getBookingForViewer } from "@/server/bookings";
 
 export const metadata: Metadata = {
   title: "Booking details",
@@ -31,7 +32,9 @@ export default function BookingPage({ params, searchParams }: PageProps<"/bookin
 async function Booking({ params, searchParams }: Pick<PageProps<"/bookings/[bookingId]">, "params" | "searchParams">) {
   const [{ bookingId }, query] = await Promise.all([params, searchParams]);
   const key = typeof query.k === "string" ? query.k : undefined;
-  const result = await getBookingWithKey(bookingId, key);
+  const user = await getCurrentUser();
+  // The link's key opens the booking; a signed-in owner doesn't need one.
+  const result = await getBookingForViewer(bookingId, key, user?.id);
 
   if (!result) {
     return (
@@ -48,7 +51,7 @@ async function Booking({ params, searchParams }: Pick<PageProps<"/bookings/[book
     <BookingDetail
       booking={result.booking}
       access={result.access}
-      manageKey={result.access === "manage" ? key : undefined}
+      manageKey={result.access === "manage" ? bookingKey(bookingId, "manage") : undefined}
       viewUrl={bookingUrl(bookingId, "view")}
       isNew={query.new === "1"}
     />

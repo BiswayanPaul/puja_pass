@@ -1,8 +1,8 @@
 import "server-only";
-import { notFound } from "next/navigation";
 import type { Prisma } from "@/generated/prisma/client";
 import type { ClubApplicationStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
+import { displayName } from "@/lib/users";
 import type {
   AdminClub,
   AdminOverview,
@@ -18,22 +18,6 @@ import type {
 
 /** Pending applications older than this are flagged (the club form promises 2–3 working days). */
 export const REVIEW_DUE_DAYS = 3;
-
-/**
- * The signed-in platform admin.
- * TODO(auth): read the session and check `role === "PLATFORM_ADMIN"`. Until
- * auth exists the admin area only works in development, as the seeded admin.
- */
-export async function requirePlatformAdmin() {
-  if (process.env.NODE_ENV !== "development") notFound();
-  const admin = await prisma.user.findFirst({
-    where: { role: "PLATFORM_ADMIN" },
-    select: { id: true, name: true, email: true },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!admin) throw new Error("No platform admin user found. Run `bun run db:seed`.");
-  return admin;
-}
 
 /** Fields a pandal needs before it can go live; also enforced when publishing. */
 export function getProfileGaps(pandal: {
@@ -143,7 +127,7 @@ export async function getApplication(id: string): Promise<ClubApplicationDetail 
       email: true,
       phone: true,
       reviewNotes: true,
-      reviewedBy: { select: { name: true } },
+      reviewedBy: { select: { name: true, email: true } },
       submittedBy: { select: { name: true, email: true } },
       club: { select: { id: true, name: true, verified: true } },
     },
@@ -172,18 +156,23 @@ export async function getApplication(id: string): Promise<ClubApplicationDetail 
     certificate: row.certificateUrl,
     permission: row.permissionUrl,
     reviewNotes: row.reviewNotes,
-    reviewedBy: row.reviewedBy?.name ?? null,
-    submittedBy: row.submittedBy,
+    reviewedBy: row.reviewedBy ? displayName(row.reviewedBy) : null,
+    submittedBy: row.submittedBy && { name: displayName(row.submittedBy), email: row.submittedBy.email },
     club: row.club,
     relatedApplications: related.map((item) => ({ id: item.id, clubName: item.clubName, status: toStatus(item.status) })),
   };
+}
+
+function ownerName(members: { role: string; user: { name: string | null; email: string | null } }[]) {
+  const owner = members.find((member) => member.role === "OWNER");
+  return owner ? displayName(owner.user) : null;
 }
 
 export async function getAdminClubs(): Promise<AdminClub[]> {
   const rows = await prisma.club.findMany({
     include: {
       pandals: { select: { id: true, name: true, slug: true, published: true }, orderBy: { name: "asc" } },
-      members: { select: { role: true, user: { select: { name: true } } } },
+      members: { select: { role: true, user: { select: { name: true, email: true } } } },
     },
     // Unverified clubs first: they are the ones that need attention.
     orderBy: [{ verified: "asc" }, { name: "asc" }],
@@ -196,7 +185,7 @@ export async function getAdminClubs(): Promise<AdminClub[]> {
     verified: row.verified,
     verifiedAt: row.verifiedAt?.toISOString() ?? null,
     verificationNote: row.verificationNote,
-    owner: row.members.find((member) => member.role === "OWNER")?.user.name ?? null,
+    owner: ownerName(row.members),
     memberCount: row.members.length,
     pandals: row.pandals,
   }));

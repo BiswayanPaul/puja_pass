@@ -1,23 +1,18 @@
 "use client";
 
-import { demoClubAdmin, demoVisitor } from "@/data/users";
-import { createPersistentStore } from "@/lib/create-store";
-import type { User, UserRole } from "@/types";
+import { signOut as authSignOut, useSession } from "next-auth/react";
 
-// Mock session. Replace with real auth (cookies / provider) when the backend lands.
-const sessionStore = createPersistentStore<User | null>("pujapass:session", null);
+// Client-side view of the Auth.js session, fetched from /api/auth/session so
+// static pages can stay static. Use it for UI only (menus, prefilled forms);
+// the server re-checks access with src/server/auth/session.ts.
 
-export function useSession() {
-  return sessionStore.useStore();
-}
+export { SessionProvider } from "next-auth/react";
 
-export function signIn(role: UserRole, overrides: Partial<User> = {}) {
-  const base = role === "club_admin" ? demoClubAdmin : demoVisitor;
-  const user = { ...base, ...overrides };
-  sessionStore.set(user);
-  return user;
+export function useCurrentUser() {
+  const { data, status } = useSession();
+  return { user: data?.user ?? null, status };
 }
 
 export function signOut() {
-  sessionStore.set(null);
+  return authSignOut({ redirectTo: "/" });
 }
