@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Suspense } from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { LayoutDashboard, LogOut, Menu, Route, Sparkles, Ticket, UserRound } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -107,8 +108,26 @@ function TrailButton() {
   );
 }
 
+// The active link depends on the URL, which isn't known while prerendering
+// dynamic routes such as /bookings/[bookingId]; the fallback renders plain links.
+function DesktopLinks({ pathname }: { pathname: string | null }) {
+  return links.map((link) => (
+    <Link
+      key={link.label}
+      href={link.href}
+      aria-current={pathname && isActive(pathname, link.href) ? "page" : undefined}
+      className="border-b-2 border-transparent py-1 text-base font-medium text-white/90 transition-colors hover:text-orange-300 aria-[current=page]:border-orange-500 aria-[current=page]:text-white"
+    >
+      {link.label}
+    </Link>
+  ));
+}
+
+function ActiveDesktopLinks() {
+  return <DesktopLinks pathname={usePathname()} />;
+}
+
 export default function Navbar() {
-  const pathname = usePathname();
   const user = useSession();
 
   return (
@@ -121,16 +140,9 @@ export default function Navbar() {
           aria-label="Main navigation"
           className="hidden items-center gap-7 lg:flex"
         >
-          {links.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              aria-current={isActive(pathname, link.href) ? "page" : undefined}
-              className="border-b-2 border-transparent py-1 text-base font-medium text-white/90 transition-colors hover:text-orange-300 aria-[current=page]:border-orange-500 aria-[current=page]:text-white"
-            >
-              {link.label}
-            </Link>
-          ))}
+          <Suspense fallback={<DesktopLinks pathname={null} />}>
+            <ActiveDesktopLinks />
+          </Suspense>
         </nav>
 
         {/* Desktop actions */}

@@ -51,9 +51,10 @@ Festival days are configured in `src/data/festival.ts` (currently Shashthi 28 Se
 | --- | --- | --- | --- |
 | Home, pandal explorer, pandal detail | ✅ | **PostgreSQL** (`src/server/pandals.ts`) | — |
 | Ticket tiers, slots, reviews on pandal page | ✅ | **PostgreSQL** | Live availability (§12.3) |
-| Puja trail (cart) | ✅ | localStorage (snapshot per line) | Server-side re-validation at checkout |
-| Checkout & payment | ✅ | Simulated; writes to localStorage | Real bookings + Razorpay (§12.3–12.4) |
-| My bookings, booking detail, cancel | ✅ | Seed mock + localStorage | DB-backed, per user (§12.3) |
+| Puja trail (cart) | ✅ | localStorage (snapshot per line); re-priced on the server at checkout | — |
+| Checkout & payment | ✅ | **PostgreSQL** booking with atomic seat reservation; payment simulated | Razorpay + seat holds (§12.3–12.4) |
+| Booking emails | ✅ | Resend via the `Notification` outbox (confirmation + cancellation) | Own sending domain; WhatsApp after Meta verification |
+| My bookings, booking detail, cancel | ✅ | **PostgreSQL**, opened with signed links; "My bookings" lists bookings made on this device | Per-user list after auth (§12.1) |
 | Login / register / session | ✅ | Mock session in localStorage | Real auth (§12.1) |
 | Club registration (4 steps) | ✅ | **PostgreSQL** (`ClubApplication`); documents keep file names only | File uploads (§12.6) |
 | Platform admin (`/admin`) | ✅ | **PostgreSQL**: review applications, verify/revoke clubs, publish/feature pandals | Real admin sign-in (§12.1) |
@@ -62,7 +63,7 @@ Festival days are configured in `src/data/festival.ts` (currently Shashthi 28 Se
 | Club tickets & slots | ✅ | Reads DB; edits only in React state | Server Actions (§12.5) |
 | Entry scanner | ✅ | Fully mock (`src/data/club.ts`) | Camera decoding + check-in API (§12.5) |
 | Saved pandals (heart) | ✅ | localStorage | `SavedPandal` table |
-| QR codes | ✅ | Placeholder graphic (not scannable) | Real QR with signed token (§12.5) |
+| QR codes | ✅ | Real QR (`qrcode`) holding a signed link `/p/<code>.<sig>` → public pass check page | Gate check-in in the scanner (§12.5) |
 
 ---
 
@@ -171,11 +172,11 @@ puja_pass/
     │   └── not-found.tsx      # Global 404
     ├── components/
     │   ├── layout/            # Navbar (client), Footer
-    │   ├── shared/            # Home sections, PageHeader, EmptyState, StatusBadge, Logo, FakeQr
+    │   ├── shared/            # Home sections, PageHeader, EmptyState, StatusBadge, Logo
     │   └── ui/                # Primitives: button, sheet (Base UI dialog), field (inputs)
     ├── features/              # Feature modules: components + client hooks
     │   ├── auth/              # login/register/club-register forms, use-session (mock)
-    │   ├── bookings/          # bookings list/detail, use-bookings (mock store)
+    │   ├── bookings/          # bookings list/detail, cancel action, device-bookings (refs + keys)
     │   ├── checkout/          # checkout form
     │   ├── club/              # club shell (sidebar), dashboard chart, profile form, tickets, scanner
     │   ├── pandals/           # explorer, filters, cards, slot picker, use-saved-pandals
@@ -279,12 +280,40 @@ Notes:
 
 ### 7.3 Important flows
 
-#### Add to trail → checkout → pass (current, mocked)
+#### Add to trail → checkout → pass
 
 1. `/pandals/[slug]` → `SlotPicker`: pass type → day → slot → visitors → `addToTrail(snapshot)`.
 2. `/trail` shows lines grouped by day; `TrailSummary` computes subtotal + fees.
-3. `/checkout` → `createBooking()` (local, random `PP26-XXXXXX` reference and pass codes) → `clearTrail()` → `/bookings/{id}?new=1`.
-4. `/bookings/[id]` renders each pass with `FakeQr`, print, and cancel.
+3. `/checkout` → `placeBooking()` (`src/features/checkout/actions.ts`):
+   - re-prices from the DB and refuses if the total differs from what the visitor saw;
+   - in one transaction, reserves seats with a conditional `UPDATE "Slot"` (never oversells) and creates the `Booking` (CONFIRMED, demo `Payment`), its `Pass`es and a `Notification`;
+   - after the response, `deliverSoon()` emails the passes.
+4. The browser remembers `{ reference, key }` (`device-bookings.ts`) and opens `/bookings/{ref}?k=<manage key>&new=1`.
+5. `/bookings/[id]` checks the key on the server (`getBookingWithKey`) and renders real QR codes, print, share and (manage key only) cancel.
+
+#### Booking links and QR codes (`src/server/booking-links.ts`)
+
+- Every booking has two keys, both HMACs of the reference with `BOOKING_SECRET`:
+  - **manage**: only in the confirmation email and this browser; can cancel;
+  - **view**: what "Share on WhatsApp" / "Copy link" send; read-only.
+- QR codes hold a signed link, `<site>/p/<pass code>.<hex signature>` (`passQrUrl` / `verifyPassToken`):
+  - any phone camera opens `/p/[token]`, a public page that says whether the pass is genuine and Valid / Already used / Cancelled, without personal details;
+  - the gate scanner should read the same link, verify it with `verifyPassToken`, then check in atomically.
+  - The signature is hex and codes are upper case, so links still verify if a scanner app changes the letter case.
+  - In development the link points at `localhost`, so a phone can't open it; set `NEXT_PUBLIC_SITE_URL` to your computer's network address to test with a phone.
+- Rotating `BOOKING_SECRET` invalidates every link and QR code already sent.
+
+#### Notifications outbox (`src/server/notifications`)
+
+- Write a `Notification` row in the same transaction as the change (`bookingNotification()`), then call `deliverSoon(ids)`, which sends after the response via `after()`.
+- `deliverNotification()` claims a row (PENDING → SENDING) so it is never sent twice; failures back off 2/4/8/16 min and become FAILED after 5 attempts. Resend also gets the notification id as an idempotency key.
+- `GET /api/cron/notifications` with `Authorization: Bearer $CRON_SECRET` retries due rows and recovers rows stuck in SENDING. **Schedule it** (e.g. Vercel Cron every 5 minutes) when deploying.
+- Email: `sendEmail()` in `email.ts` picks a provider from `.env`:
+  - **SMTP** (`SMTP_USER` + `SMTP_PASS`, default host `smtp.gmail.com:465`), used today with a Gmail App password: free, ~500 recipients/day, sent from that Gmail address (`EMAIL_FROM` must be it). Over the limit, Gmail refuses sends; the outbox retries, then marks them FAILED.
+  - **Resend** (`RESEND_API_KEY`): switch to it once a domain is verified. Resend can't send from `gmail.com` or any unverified domain.
+  - Neither, in development: emails are only logged. `EMAIL_REDIRECT_TO` (testing) sends everything to one inbox.
+  - Templates are React Email components in `booking-emails.tsx`; QR codes are inline attachments (`cid:`).
+- WhatsApp is not sent yet: Meta restricted the WhatsApp Business Account until **business verification**. Visitors share the view link with the WhatsApp share button instead.
 
 **Club area:** `(club)/layout.tsx` loads the managed pandal (`CLUB_PANDAL_ID` in `src/data/club.ts`) and passes `{ name, clubName, slug }` into `ClubShell`. Pages fetch tiers and slots by the pandal's DB id.
 
@@ -343,7 +372,7 @@ Commit everything in `prisma/migrations/`. Never edit an applied migration; add 
   - **Reviewed applications**: one rejected (with notes) and three approved.
   - **Clubs from those approvals**: a verified club whose draft pandal has an incomplete profile; a verified club whose draft is ready to publish; a club whose verification was revoked (pandal hidden).
 - Connects with `DIRECT_URL` when set, since the pooled Supabase URL can time out transactions.
-- **Seeded pandal, tier and slot ids equal the mock ids** (e.g. pandal id = slug = `sreebhumi-sporting-club`). The remaining mock lookups in `src/lib/queries.ts` rely on this. Rows created later get cuids.
+- **Seeded pandal, tier and slot ids equal the mock ids** (e.g. pandal id = slug = `sreebhumi-sporting-club`). Rows created later get cuids.
 - If you remove `src/data`, rewrite the seed first.
 
 ---
@@ -363,7 +392,7 @@ Commit everything in `prisma/migrations/`. Never edit an applied migration; add 
 | `users.ts` | Demo visitor + club admin | Mock session, login form, club shell |
 | `club.ts` | `CLUB_PANDAL_ID`, `CLUB_TODAY`, KPI numbers, daily sales, check-ins, scanner passes | Club dashboard KPIs/chart, scanner, club layout |
 
-`src/lib/queries.ts` now only has `getPandalById`, `getTierById` and `getSeedBookings` for the bookings feature. **Delete it once bookings use the DB.**
+`src/lib/queries.ts` and the mock bookings store were removed; `src/data/bookings.ts` is now only read by the seed.
 
 ---
 
@@ -418,18 +447,17 @@ In dependency order. Each item lists the files to touch.
 
 ### 12.2 Bookings on the database
 
-- New `src/server/bookings.ts`: `getBookingsForUser(userId)`, `getBookingByReference(ref, userId)`.
-- Replace `useBookings` / `useBooking` in `bookings-list.tsx`, `booking-detail.tsx` and `my-bookings/page.tsx` with server-fetched data (wrap in Suspense; these are per-user).
-- Delete `src/lib/queries.ts`, `src/data/bookings.ts` usage and `generateStaticParams` on `/bookings/[bookingId]` (use a Suspense'd dynamic read instead).
-- Cancellation becomes a Server Action:
-  - set the `Booking` and its `Pass`es to `CANCELLED`
-  - decrement `Slot.booked`
-  - trigger a refund
-  - revalidate the slot tags
+Done (see §7.3): bookings, passes and cancellation are in the DB; links are signed; emails go through the outbox.
+
+Still to do:
+
+- After auth: `getBookingsForUser(userId)` for "My bookings", set `Booking.userId` at checkout, and attach guest bookings when a visitor signs up with the same verified email.
+- Refuse slots that have already started (the check is a TODO in `placeBooking` because the seeded festival dates are in the past).
+- A "resend my passes" action, and an admin view of failed notifications.
 
 ### 12.3 Checkout with seat holds (the critical piece)
 
-Server Action `createCheckout(trailLines, contact)`:
+`placeBooking` already re-prices and reserves seats atomically (steps 1–2 below). What's left is the payment step: create the booking as `PENDING` instead of `CONFIRMED`, and confirm it (and only then queue the email) from the Razorpay webhook.
 
 1. Re-load each tier and slot from the DB; ignore client prices. Reject inactive tiers and paused, sold-out or past slots.
 2. In **one transaction**, reserve seats atomically per slot:
@@ -464,7 +492,6 @@ Also enforce per-tier capacity if you need it (today capacity is per slot = sum 
 - **Dashboard:** replace `dailySales`, `tierSales`, `todayStats` and `recentCheckIns` with aggregates over `Pass` / `Payment` / `CheckIn` (use `cacheLife("minutes")`).
 - **QR codes:**
   - The QR should encode a **signed token** (e.g. HMAC of `passId + slotId`), not the plain code.
-  - Replace `FakeQr` with a real encoder (`qrcode` / `qrcode.react`).
 - **Scanner** (`entry-scanner.tsx`):
   - Decode with the camera (`@zxing/browser` or `BarcodeDetector`).
   - POST to a check-in action that verifies the token and atomically flips the pass (`UPDATE "Pass" SET status='USED', "checkedInAt"=now() WHERE id=$1 AND status='VALID'`).
@@ -493,7 +520,7 @@ Still to do:
 
 ### 12.7 Other gaps
 
-- **Notifications:** email/SMS/WhatsApp with passes after booking; a reminder before each slot.
+- **Notifications:** WhatsApp delivery once Meta business verification passes (add a `WHATSAPP` branch in `send()`); a reminder before each slot.
 - **Reviews:** let visitors review after a `USED` pass; recompute `ratingAverage`/`reviewCount`.
 - **Saved pandals:** persist to `SavedPandal` for signed-in users.
 - **Real map:**
@@ -519,7 +546,8 @@ Still to do:
 | "Near Me" uses a fake distance | `server/mappers.ts` | Derived from the stylised map position. |
 | Club edits are not saved | `pandal-profile-form.tsx`, `tickets-manager.tsx` | Local React state only (§12.5). |
 | Club dashboard KPIs, chart, check-ins and scanner are mock | `src/data/club.ts` | `CLUB_TODAY` is fixed to Ashtami 2026-09-30. |
-| QR codes aren't scannable | `components/shared/FakeQr.tsx` | Deterministic placeholder pattern. |
+| Emails are sent from a personal Gmail account | `.env` (`SMTP_*`) | Free stopgap capped at ~500/day. Buy a domain, verify it in Resend, then remove `SMTP_USER`/`SMTP_PASS` and set `EMAIL_FROM` to the domain. |
+| Booking reference can't be looked up by email | `/my-bookings` | "My bookings" lists bookings made in this browser; other devices need the emailed link until auth exists. |
 | Slot picker always starts on Shashthi | `slot-picker.tsx` | Should default to today (or the next festival day) once real dates matter; compute it outside render. |
 | Festival dates need confirming | `src/data/festival.ts` | 28 Sep – 2 Oct 2026, from the design mock-up. |
 | Real club names with invented prices and ratings | `src/data/*`, DB seed | Replace with clubs' real data before going public. |
@@ -547,7 +575,8 @@ After a schema change: `bun run db:migrate`, then update `mappers.ts` and `types
 
 ## 15. Deployment notes
 
-- Environment variables: `DATABASE_URL` (add the payment, auth and storage secrets as those features land). Keep `.env.example` up to date; it's the only env file committed.
+- Environment variables: see `.env.example` (`DATABASE_URL`, `DIRECT_URL`, `BOOKING_SECRET`, `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, …). Keep it up to date; it's the only env file committed.
+- Schedule `GET /api/cron/notifications` (every ~5 minutes) so failed emails are retried.
 - Release order: `bun install` (runs `prisma generate`) → `bun run db:deploy` → `bun run build` → `bun run start`.
 - Use a pooled connection string for serverless hosts (e.g. Neon/Supabase pooler, Prisma Postgres) to avoid exhausting connections.
 - `'use cache'` uses an in-memory cache by default. On serverless, entries don't persist between instances. Consider `'use cache: remote'` with a platform cache handler if the DB load matters.

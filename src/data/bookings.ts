@@ -1,8 +1,27 @@
-import type { Booking } from "@/types";
+import type { Booking, PassStatus } from "@/types";
 
-// Bookings belonging to the demo visitor (see `users.ts`).
-// New bookings made at checkout are stored in the browser on top of these.
-export const bookings: Booking[] = [
+// Bookings belonging to the demo visitor (see `users.ts`). Only the seed
+// reads this file; the app reads bookings from the database.
+
+type SeedPass = {
+  id: string;
+  code: string;
+  pandalId: string;
+  tierId: string;
+  slotId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  holderName: string;
+  quantity: number;
+  unitPrice: number;
+  status: PassStatus;
+  checkedInAt?: string;
+};
+
+type SeedBooking = Omit<Booking, "passes" | "status"> & { status: "confirmed" | "completed" | "cancelled"; passes: SeedPass[] };
+
+export const bookings: SeedBooking[] = [
   {
     id: "PP26-4K7Q2M",
     createdAt: "2026-09-20T11:24:00+05:30",

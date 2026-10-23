@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { BookingStatus, PassStatus } from "@/types";
 
 const styles = {
+  pending: { label: "Awaiting payment", icon: Clock3, className: "bg-amber-50 text-amber-800" },
   confirmed: { label: "Confirmed", icon: CheckCircle2, className: "bg-emerald-50 text-emerald-700" },
   valid: { label: "Valid", icon: CheckCircle2, className: "bg-emerald-50 text-emerald-700" },
   completed: { label: "Completed", icon: Clock3, className: "bg-stone-100 text-stone-700" },

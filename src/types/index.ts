@@ -102,24 +102,27 @@ export type PassStatus = "valid" | "used" | "cancelled";
 
 export type Pass = {
   id: string;
+  /** Shown under the QR code, e.g. "SRB-3009-8841". */
   code: string;
-  pandalId: string;
-  tierId: string;
-  slotId: string;
-  date: string;
-  startTime: string;
-  endTime: string;
+  status: PassStatus;
   holderName: string;
   quantity: number;
   unitPrice: number;
-  status: PassStatus;
   checkedInAt?: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  tierName: string;
+  pandal: { slug: string; name: string; neighbourhood: string; address: string; imageSrc: string };
+  /** Scannable QR code (SVG markup) carrying the signed pass payload. */
+  qrSvg: string;
 };
 
-export type BookingStatus = "confirmed" | "completed" | "cancelled";
+export type BookingStatus = "pending" | "confirmed" | "completed" | "cancelled";
 export type PaymentMethod = "UPI" | "Card" | "Net Banking";
 
 export type Booking = {
+  /** The booking reference, e.g. "PP26-4K7Q2M". */
   id: string;
   createdAt: string;
   status: BookingStatus;
@@ -129,6 +132,34 @@ export type Booking = {
   fees: number;
   total: number;
   paymentMethod: PaymentMethod;
+};
+
+/** What the public pass check page (/p/<token>) shows: no personal details. */
+export type PassCheck = {
+  code: string;
+  status: PassStatus;
+  quantity: number;
+  tierName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  checkedInAt?: string;
+  pandal: { slug: string; name: string; neighbourhood: string };
+};
+
+/** "manage" can cancel; "view" is the read-only link that gets shared. */
+export type BookingAccess = "view" | "manage";
+
+export type BookingSummary = {
+  reference: string;
+  status: BookingStatus;
+  createdAt: string;
+  total: number;
+  pandals: { name: string; imageSrc: string }[];
+  dates: string[];
+  passCount: number;
+  visitors: number;
+  firstStartTime: string;
 };
 
 export type UserRole = "visitor" | "club_admin";

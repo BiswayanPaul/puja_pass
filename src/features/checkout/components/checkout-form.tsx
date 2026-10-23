@@ -7,7 +7,8 @@ import { ArrowLeft, CreditCard, Landmark, Loader2, Lock, Route, Smartphone } fro
 import EmptyState from "@/components/shared/EmptyState";
 import { Checkbox, Field, Input, Select } from "@/components/ui/field";
 import { useSession } from "@/features/auth/use-session";
-import { createBooking } from "@/features/bookings/use-bookings";
+import { rememberBooking } from "@/features/bookings/device-bookings";
+import { placeBooking } from "@/features/checkout/actions";
 import { TrailSummary } from "@/features/trail/components/trail-summary";
 import { clearTrail, useTrail } from "@/features/trail/use-trail";
 import { formatINR } from "@/lib/format";
@@ -26,6 +27,7 @@ export function CheckoutForm() {
   const trail = useTrail();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("UPI");
   const [status, setStatus] = useState<"idle" | "processing" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
 
   if (status === "done") {
     return <p className="py-20 text-center text-stone-600">Payment successful. Opening your passes…</p>;
@@ -42,26 +44,36 @@ export function CheckoutForm() {
     );
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setStatus("processing");
-    // Simulated payment gateway round-trip.
-    setTimeout(() => {
-      const booking = createBooking({
-        lines: trail.lines,
-        fees: trail.fees,
-        paymentMethod,
+    setError(null);
+    try {
+      // The server re-prices the trail and reserves the seats; payment is simulated for now.
+      const result = await placeBooking({
+        lines: trail.lines.map(({ slotId, tierId, quantity }) => ({ slotId, tierId, quantity })),
         contact: {
           name: String(form.get("name")),
           email: String(form.get("email")),
           phone: String(form.get("phone")),
         },
+        paymentMethod,
+        expectedTotal: trail.total,
       });
+      if (!result.ok) {
+        setError(result.error);
+        setStatus("idle");
+        return;
+      }
+      rememberBooking(result.reference, result.manageKey);
       setStatus("done");
       clearTrail();
-      router.push(`/bookings/${booking.id}?new=1`);
-    }, 1200);
+      router.push(`${result.path}&new=1`);
+    } catch {
+      setError("We couldn't complete your booking. Check your connection and try again.");
+      setStatus("idle");
+    }
   };
 
   return (
@@ -82,10 +94,10 @@ export function CheckoutForm() {
             <Field label="Full name" className="sm:col-span-2">
               <Input name="name" required autoComplete="name" defaultValue={user?.name} placeholder="Name of the lead visitor" />
             </Field>
-            <Field label="Email">
+            <Field label="Email" hint="We'll email your passes here.">
               <Input name="email" type="email" required autoComplete="email" defaultValue={user?.email} placeholder="you@example.com" />
             </Field>
-            <Field label="Mobile number" hint="We'll SMS your booking reference.">
+            <Field label="Mobile number" hint="Only used about your visit.">
               <Input name="phone" type="tel" required autoComplete="tel" defaultValue={user?.phone} placeholder="+91 98XXX XXXXX" pattern="[+0-9 ]{10,16}" />
             </Field>
           </div>
@@ -153,6 +165,11 @@ export function CheckoutForm() {
 
       <aside className="lg:sticky lg:top-6 lg:h-fit">
         <TrailSummary trail={trail}>
+          {error && (
+            <p role="alert" className="mt-5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800">
+              {error}
+            </p>
+          )}
           <button
             type="submit"
             disabled={status === "processing"}

@@ -25,7 +25,7 @@ const prisma = new PrismaClient({
 });
 
 const crowdLevels: Record<UI.CrowdLevel, CrowdLevel> = { Low: "LOW", Moderate: "MODERATE", High: "HIGH", "Very High": "VERY_HIGH" };
-const bookingStatuses: Record<UI.BookingStatus, BookingStatus> = { confirmed: "CONFIRMED", completed: "COMPLETED", cancelled: "CANCELLED" };
+const bookingStatuses: Record<UI.BookingStatus, BookingStatus> = { pending: "PENDING", confirmed: "CONFIRMED", completed: "COMPLETED", cancelled: "CANCELLED" };
 const passStatuses: Record<UI.PassStatus, PassStatus> = { valid: "VALID", used: "USED", cancelled: "CANCELLED" };
 const paymentMethods: Record<UI.PaymentMethod, PaymentMethod> = { UPI: "UPI", Card: "CARD", "Net Banking": "NET_BANKING" };
 
