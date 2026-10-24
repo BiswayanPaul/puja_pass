@@ -60,7 +60,7 @@ Festival days are configured in `src/data/festival.ts` (currently Shashthi 28 Se
 | Platform admin (`/admin`) | ✅ | **PostgreSQL**: review applications, verify/revoke clubs, publish/feature pandals; `PLATFORM_ADMIN` only | Audit log |
 | Club dashboard | ✅ | Slots/tiers from DB; KPIs, chart, check-ins are mock | Aggregate from DB (§12.5) |
 | Club pandal profile editor | ✅ | **PostgreSQL** via `updatePandalProfile` (`src/features/club/actions.ts`); real Live/Draft status | Photo uploads (§12.5) |
-| Club tickets & slots | ✅ | Reads DB; edits only in React state | Server Actions (§12.5) |
+| Club tickets & slots | ✅ | **PostgreSQL**: pass types, entry windows (bulk add), capacity, pause, delete | Per-tier capacity limits |
 | Entry scanner | ✅ | Fully mock (`src/data/club.ts`) | Camera decoding + check-in API (§12.5) |
 | Saved pandals (heart) | ✅ | localStorage | `SavedPandal` table |
 | QR codes | ✅ | Real QR (`qrcode`) holding a signed link `/p/<code>.<sig>` → public pass check page | Gate check-in in the scanner (§12.5) |
@@ -514,7 +514,7 @@ Also enforce per-tier capacity if you need it (today capacity is per slot = sum 
 ### 12.5 Club tools on real data
 
 - **Profile editor**: done. `updatePandalProfile` checks the member's club owns the pandal, validates, saves, and refreshes the public page (`updateTag`). Rules: the club name is read-only (it's what PujaPass verified); a **live** pandal can't be saved with required fields empty (`getProfileGaps`); the slug never changes. Drafts go live when a platform admin publishes them from `/admin/pandals` (they appear under "Ready to publish" once complete). Still to do: photo uploads (Supabase Storage/S3) feeding `PandalImage`; removing and reordering existing photos already saves.
-- **Tickets & slots** (`tickets-manager.tsx`): actions to create/update tiers, toggle `active`, edit `Slot.capacity` (never below `booked`) and `salesPaused`. Revalidate the tiers/slots tags.
+- **Tickets & slots**: done (`src/features/club/actions.ts`, read with `getClubTiers`/`getClubSlots`, which show real paused/booked state). `saveTicketTier`, `setTierActive`, `addSlots` (chosen festival days × standard or custom windows; existing windows are skipped), `updateSlot` (capacity can't drop below `booked`, checked atomically; pause/resume), `deleteSlot` (only without bookings). Each action checks the member's club runs the pandal and refreshes the public cache tags. Slot capacity is shared by all pass types; `capacityPerSlot` only sets the default for new windows.
 - **Dashboard:** replace `dailySales`, `tierSales`, `todayStats` and `recentCheckIns` with aggregates over `Pass` / `Payment` / `CheckIn` (use `cacheLife("minutes")`).
 - **QR codes:**
   - The QR should encode a **signed token** (e.g. HMAC of `passId + slotId`), not the plain code.
@@ -568,12 +568,11 @@ Still to do:
 | "Kolkata" dropdown in explorer hero does nothing | `pandal-explorer-hero.tsx` | Wire it to the area filter or remove it. |
 | "Theme / Style" and "Facilities" filter groups from the design aren't built | `filter-sidebar.tsx` | Data exists (`category`, `amenities`). |
 | "Near Me" uses a fake distance | `server/mappers.ts` | Derived from the stylised map position. |
-| Pass types and slot edits are not saved | `tickets-manager.tsx` | Local React state only (§12.5). The pandal profile does save. |
 | Club dashboard KPIs, chart, check-ins and scanner are mock | `src/data/club.ts` | `CLUB_TODAY` is fixed to Ashtami 2026-09-30. |
 | Emails are sent from a personal Gmail account | `.env` (`SMTP_*`) | Free stopgap capped at ~500/day. Buy a domain, verify it in Resend, then remove `SMTP_USER`/`SMTP_PASS` and set `EMAIL_FROM` to the domain. |
 | Booking reference can't be looked up by email | `/my-bookings` | "My bookings" lists bookings made in this browser; other devices need the emailed link until auth exists. |
 | Slot picker always starts on Shashthi | `slot-picker.tsx` | Should default to today (or the next festival day) once real dates matter; compute it outside render. |
-| Festival dates need confirming | `src/data/festival.ts` | 28 Sep – 2 Oct 2026, from the design mock-up. |
+| Festival dates are last year's | `src/data/festival.ts` | 28 Sep – 2 Oct 2026. Update `pujaDays` for 2027: clubs can only add entry windows on these days, and visitors only see these days. |
 | Real club names with invented prices and ratings | `src/data/*`, DB seed | Replace with clubs' real data before going public. |
 | Old trail data is dropped | `use-trail.ts` | Key bumped to `pujapass:trail:v2` when lines became snapshots. |
 | Headings use the system serif | `globals.css` | The mock-up suggests a display serif (e.g. Fraunces/Playfair via `next/font`). |

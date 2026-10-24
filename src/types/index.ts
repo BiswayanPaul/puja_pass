@@ -70,6 +70,9 @@ export type Slot = {
   booked: number;
 };
 
+/** A slot as the club sees it: real booking count and sales state. */
+export type ClubSlot = Omit<Slot, "pandalId"> & { salesPaused: boolean };
+
 export type Review = {
   id: string;
   pandalId: string;
