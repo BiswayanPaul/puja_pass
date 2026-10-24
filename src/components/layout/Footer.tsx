@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cacheLife } from "next/cache";
 import { ArrowUpRight, Mail, Sparkles } from "lucide-react";
 
 const exploreLinks = [
@@ -14,9 +15,15 @@ const companyLinks = [
   { label: "Contact Us", href: "/#contact" },
 ];
 
-const copyrightYear = 2026;
+/** Cached for a day, so the footer stays static and still rolls over each year. */
+async function currentYear() {
+  "use cache";
+  cacheLife("days");
+  return new Date().getFullYear();
+}
 
-export default function Footer() {
+export default async function Footer() {
+  const copyrightYear = await currentYear();
   return (
     <footer id="contact" className="border-t border-stone-200 bg-stone-950 text-stone-300">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">

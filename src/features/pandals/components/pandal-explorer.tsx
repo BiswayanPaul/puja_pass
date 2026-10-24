@@ -145,7 +145,10 @@ export function PandalExplorer({ pandals }: { pandals: Pandal[] }) {
                 </SheetContent>
               </Sheet>
             </div>
-            <PandalBenefits />
+            {/* Marketing copy; on phones the results come first. */}
+            <div className="hidden sm:block">
+              <PandalBenefits />
+            </div>
             {matchingFeatured.length > 0 && (
               <PandalCollection
                 title="Featured Pandals"

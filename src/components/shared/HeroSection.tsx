@@ -6,7 +6,7 @@ import HeroSearch from "./HeroSearch";
 
 export default function HeroSection() {
   return (
-    <section className="relative isolate min-h-175 overflow-hidden bg-stone-950 text-white sm:min-h-190">
+    <section className="relative isolate overflow-hidden bg-stone-950 pb-6 text-white sm:min-h-190 sm:pb-0">
       <Image
         src="/images/Hero_section.png"
         alt="Durga Maa idol during Durga Puja"
@@ -16,12 +16,13 @@ export default function HeroSection() {
         className="-z-20 object-cover object-[62%_center]"
       />
       <div className="absolute inset-0 -z-10 bg-linear-to-r from-black/85 via-black/50 to-black/10" />
-      <div className="mx-auto flex min-h-175 max-w-7xl flex-col justify-center px-4 pb-36 pt-28 sm:min-h-190 sm:px-6 sm:pt-32 lg:px-8">
+      {/* On phones the search form follows the text; from sm it overlays the bottom of the hero. */}
+      <div className="mx-auto flex max-w-7xl flex-col justify-center px-4 pb-8 pt-28 sm:min-h-190 sm:px-6 sm:pb-36 sm:pt-32 lg:px-8">
         <div className="max-w-2xl">
           <p className="text-sm font-bold tracking-[0.15em] text-orange-300">
             YOUR DURGA PUJA, BEAUTIFULLY PLANNED
           </p>
-          <h1 className="mt-4 font-serif text-5xl font-semibold leading-[0.98] tracking-tight sm:text-6xl lg:text-7xl">
+          <h1 className="mt-4 font-serif text-[2.5rem] font-semibold leading-[0.98] tracking-tight min-[400px]:text-5xl sm:text-6xl lg:text-7xl">
             Celebrate the art, devotion, and{" "}
             <span className="text-orange-300">joy of Durga Puja.</span>
           </h1>

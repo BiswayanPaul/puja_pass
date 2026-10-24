@@ -6,6 +6,7 @@ import { useState, useTransition, type FormEvent } from "react";
 import { CheckCircle2, CircleDashed, ExternalLink, Eye, ImagePlus, Leaf, Loader2, ShieldOff, TriangleAlert, X } from "lucide-react";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { areas } from "@/data/areas";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import { PandalCard } from "@/features/pandals/components/pandal-card";
 import { cn } from "@/lib/utils";
 import type { AdminPandalStatus, Area, Pandal } from "@/types";
@@ -20,6 +21,7 @@ export function PandalProfileForm({ pandal, status, profileGaps }: { pandal: Pan
   const [draft, setDraft] = useState(pandal);
   const [result, setResult] = useState<SaveProfileResult | null>(null);
   const [saving, startSaving] = useTransition();
+  const season = useFestivalDays()[0]?.date.slice(0, 4);
 
   const update = <K extends keyof Pandal>(key: K, value: Pandal[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -121,7 +123,7 @@ export function PandalProfileForm({ pandal, status, profileGaps }: { pandal: Pan
           </section>
 
           <section className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6">
-            <h2 className="font-serif text-xl font-semibold text-stone-950">Theme {2026}</h2>
+            <h2 className="font-serif text-xl font-semibold text-stone-950">{season ? `Theme ${season}` : "Theme"}</h2>
             <div className="mt-4 grid gap-4">
               <Field label="Theme title"><Input value={draft.theme.title} onChange={(event) => update("theme", { ...draft.theme, title: event.target.value })} /></Field>
               <Field label="Theme description"><Textarea value={draft.theme.description} onChange={(event) => update("theme", { ...draft.theme, description: event.target.value })} /></Field>

@@ -34,7 +34,7 @@ export function PandalCard({ pandal, featured = false }: PandalCardProps) {
         </span>
       </div>
       <div className="flex items-end justify-between gap-3 p-4">
-        <div>
+        <div className="min-w-0">
           <h3 className="font-serif text-xl font-semibold text-stone-950">
             {pandal.name}
           </h3>
@@ -43,7 +43,7 @@ export function PandalCard({ pandal, featured = false }: PandalCardProps) {
             {pandal.neighbourhood}
           </p>
           <p className="mt-1 flex items-center gap-1 text-sm text-stone-500"><Star className="size-3.5 fill-amber-400 text-amber-400" aria-hidden="true" /> <span className="font-medium text-amber-600">{pandal.rating}</span> ({pandal.reviewCount} reviews)</p>
-          <div className="mt-3 flex flex-wrap gap-2"><span className={pandal.entryType === "Free Entry" ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700" : "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700"}>{pandal.entryType}</span><span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700">{pandal.highlight}</span></div>
+          <div className="mt-3 flex flex-wrap gap-2"><span className={pandal.entryType === "Free Entry" ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700" : "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700"}>{pandal.entryType}</span>{pandal.highlight && <span title={pandal.highlight} className="max-w-full truncate rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700">{pandal.highlight}</span>}</div>
         </div>
         <Link
           href={`/pandals/${pandal.slug}`}

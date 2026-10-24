@@ -7,6 +7,7 @@ import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field"
 import { areas } from "@/data/areas";
 import { submitClubApplication } from "@/features/auth/actions";
 import { useCurrentUser } from "@/features/auth/use-session";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import { cn } from "@/lib/utils";
 
 const steps = ["Club", "Pandal", "Contact", "Review"];
@@ -36,6 +37,8 @@ export function ClubRegisterForm() {
   const [values, setValues] = useState<FormValues>({});
   const [status, setStatus] = useState<"editing" | "submitting" | "submitted">("editing");
   const [error, setError] = useState<string | null>(null);
+  // The season's year caps "year established"; the server also refuses future years.
+  const season = Number(useFestivalDays().at(-1)?.date.slice(0, 4)) || undefined;
   const { user, status: sessionStatus } = useCurrentUser();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -141,7 +144,7 @@ export function ClubRegisterForm() {
             <Field label="Club name"><Input name="clubName" required defaultValue={values.clubName} placeholder="e.g. Sreebhumi Sporting Club" /></Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Society registration no."><Input name="registration" required defaultValue={values.registration} placeholder="S/2L/12345" /></Field>
-              <Field label="Year established"><Input name="established" type="number" min={1800} max={2026} required defaultValue={values.established} placeholder="1972" /></Field>
+              <Field label="Year established"><Input name="established" type="number" min={1800} max={season} required defaultValue={values.established} placeholder="1972" /></Field>
             </div>
             <Field label="Area">
               <Select name="area" required defaultValue={values.area ?? ""}>

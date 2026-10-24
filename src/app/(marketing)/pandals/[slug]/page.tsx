@@ -17,7 +17,10 @@ import {
   UsersRound,
 } from "lucide-react";
 import { PandalCard } from "@/features/pandals/components/pandal-card";
+import { MobileBookBar } from "@/features/pandals/components/mobile-book-bar";
 import { SlotPicker } from "@/features/pandals/components/slot-picker";
+import { getFestivalDays } from "@/server/festival";
+import { cn } from "@/lib/utils";
 import {
   getNearbyPandals,
   getPandalBySlug,
@@ -76,12 +79,16 @@ async function PandalDetail({ params }: { params: PageProps<"/pandals/[slug]">["
   const pandal = await getPandalBySlug(slug);
   if (!pandal) notFound();
 
-  const [tiers, slots, reviews, nearby] = await Promise.all([
+  const [tiers, slots, reviews, nearby, festivalDays] = await Promise.all([
     getTiersForPandal(pandal.id),
     getSlotsForPandal(pandal.id),
     getReviewsForPandal(pandal.id),
     getNearbyPandals(pandal.id),
+    getFestivalDays(),
   ]);
+  const season = festivalDays[0]?.date.slice(0, 4);
+  const activeTiers = tiers.filter((tier) => tier.active);
+  const bookable = activeTiers.length > 0 && slots.length > 0;
 
   const facts = [
     { label: "Timings", value: pandal.timings, icon: Clock3 },
@@ -92,7 +99,7 @@ async function PandalDetail({ params }: { params: PageProps<"/pandals/[slug]">["
   ];
 
   return (
-    <article className="bg-stone-50 pb-20">
+    <article className={bookable ? "bg-stone-50 pb-28 lg:pb-20" : "bg-stone-50 pb-20"}>
       {/* Hero */}
       <section className="relative isolate overflow-hidden bg-stone-950 pt-16 text-white">
         <Image src={pandal.imageSrc} alt={pandal.imageAlt} fill preload sizes="100vw" className="-z-20 object-cover" />
@@ -146,7 +153,7 @@ async function PandalDetail({ params }: { params: PageProps<"/pandals/[slug]">["
             <h2 className="font-serif text-2xl font-semibold text-stone-950">About the pandal</h2>
             <p className="mt-3 leading-7 text-stone-600">{pandal.description}</p>
             <div className="mt-5 rounded-xl bg-orange-50 p-5">
-              <p className="text-xs font-bold tracking-[0.14em] text-orange-700">THEME {2026}</p>
+              <p className="text-xs font-bold tracking-[0.14em] text-orange-700">{season ? `THEME ${season}` : "THEME"}</p>
               <h3 className="mt-1 font-serif text-xl font-semibold text-stone-950">{pandal.theme.title}</h3>
               <p className="mt-2 text-sm leading-6 text-stone-700">{pandal.theme.description}</p>
             </div>
@@ -157,7 +164,15 @@ async function PandalDetail({ params }: { params: PageProps<"/pandals/[slug]">["
             <h2 className="font-serif text-2xl font-semibold text-stone-950">Gallery</h2>
             <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
               {pandal.gallery.map((image, index) => (
-                <div key={image.src} className={index === 0 ? "relative col-span-2 row-span-2 aspect-square overflow-hidden rounded-xl" : "relative aspect-square overflow-hidden rounded-xl"}>
+                <div
+                  key={image.src}
+                  className={cn(
+                    "relative aspect-square overflow-hidden rounded-xl",
+                    index === 0 && "col-span-2 row-span-2",
+                    // On the 2-column phone grid, a last photo that would sit alone spans the row.
+                    index > 0 && index === pandal.gallery.length - 1 && index % 2 === 1 && "col-span-2 aspect-video md:col-span-1 md:aspect-square",
+                  )}
+                >
                   <Image src={image.src} alt={image.alt} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover transition-transform duration-500 hover:scale-105" />
                 </div>
               ))}
@@ -236,15 +251,16 @@ async function PandalDetail({ params }: { params: PageProps<"/pandals/[slug]">["
 
       {nearby.length > 0 && (
         <section className="mx-auto mt-16 max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-end justify-between">
-            <h2 className="font-serif text-3xl font-semibold text-stone-950">Add these to your trail</h2>
-            <Link href="/pandals" className="text-sm font-semibold text-orange-700 hover:text-orange-800">View all</Link>
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+            <h2 className="font-serif text-2xl font-semibold text-stone-950 sm:text-3xl">Add these to your trail</h2>
+            <Link href="/pandals" className="-my-1.5 py-1.5 text-sm font-semibold text-orange-700 hover:text-orange-800">View all pandals</Link>
           </div>
-          <div className="mt-6 grid gap-6 md:grid-cols-3">
+          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {nearby.map((item) => <PandalCard key={item.id} pandal={item} />)}
           </div>
         </section>
       )}
+      {bookable && <MobileBookBar fromPrice={Math.min(...activeTiers.map((tier) => tier.price))} targetId="book" />}
     </article>
   );
 }
