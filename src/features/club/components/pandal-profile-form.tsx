@@ -2,25 +2,28 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
-import { CheckCircle2, ExternalLink, ImagePlus, Leaf, X } from "lucide-react";
+import { useState, useTransition, type FormEvent } from "react";
+import { CheckCircle2, CircleDashed, ExternalLink, Eye, ImagePlus, Leaf, Loader2, ShieldOff, TriangleAlert, X } from "lucide-react";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { areas } from "@/data/pandals";
 import { PandalCard } from "@/features/pandals/components/pandal-card";
 import { cn } from "@/lib/utils";
-import type { Area, Pandal } from "@/types";
+import type { AdminPandalStatus, Area, Pandal } from "@/types";
+import { updatePandalProfile, type SaveProfileResult } from "../actions";
 import { ClubPageHeader } from "./club-shell";
 
 const amenityOptions = ["Drinking water", "First aid", "Wheelchair access", "Help desk", "Priority queue", "Cloak room", "Food court", "Parking", "Seating area", "Kids' corner"];
 const categories = ["Art & Heritage", "Heritage", "Contemporary", "Theme Based", "Family Friendly", "Eco-friendly", "Grand Scale"];
 
-export function PandalProfileForm({ pandal }: { pandal: Pandal }) {
+/** live: on the public site · draft: not yet published by PujaPass · blocked: club not verified. */
+export function PandalProfileForm({ pandal, status, profileGaps }: { pandal: Pandal; status: AdminPandalStatus; profileGaps: string[] }) {
   const [draft, setDraft] = useState(pandal);
-  const [saved, setSaved] = useState(false);
+  const [result, setResult] = useState<SaveProfileResult | null>(null);
+  const [saving, startSaving] = useTransition();
 
   const update = <K extends keyof Pandal>(key: K, value: Pandal[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
-    setSaved(false);
+    setResult(null);
   };
 
   const toggleAmenity = (amenity: string) =>
@@ -28,8 +31,34 @@ export function PandalProfileForm({ pandal }: { pandal: Pandal }) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // TODO: persist via API once the backend exists.
-    setSaved(true);
+    startSaving(async () => {
+      try {
+        setResult(
+          await updatePandalProfile({
+            pandalId: pandal.id,
+            name: draft.name,
+            category: draft.category,
+            area: draft.area,
+            neighbourhood: draft.neighbourhood,
+            address: draft.address,
+            description: draft.description,
+            highlight: draft.highlight,
+            timings: draft.timings,
+            themeTitle: draft.theme.title,
+            themeDescription: draft.theme.description,
+            idolArtist: draft.idolArtist,
+            nearestMetro: draft.nearestMetro,
+            crowdLevel: draft.crowdLevel,
+            freeEntryInfo: draft.freeEntryInfo,
+            amenities: draft.amenities,
+            ecoFriendly: draft.ecoFriendly,
+            gallery: draft.gallery.map((image) => image.src),
+          }),
+        );
+      } catch {
+        setResult({ ok: false, error: "We couldn't save your changes. Check your connection and try again." });
+      }
+    });
   };
 
   return (
@@ -39,19 +68,28 @@ export function PandalProfileForm({ pandal }: { pandal: Pandal }) {
         description="This is what visitors see on your public pandal page."
         actions={
           <>
-            <Link href={`/pandals/${pandal.slug}`} className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-50">
-              <ExternalLink className="size-4" /> View live page
-            </Link>
-            <button type="submit" className="rounded-full bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700">Save changes</button>
+            {status === "live" && (
+              <Link href={`/pandals/${pandal.slug}`} className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-50">
+                <ExternalLink className="size-4" /> View live page
+              </Link>
+            )}
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-70">
+              {saving && <Loader2 className="size-4 animate-spin" aria-hidden="true" />} Save changes
+            </button>
           </>
         }
       />
 
-      {saved && (
-        <p className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800" role="status">
-          <CheckCircle2 className="size-4" /> Changes saved. They will appear on your public page shortly.
-        </p>
-      )}
+      {result &&
+        (result.ok ? (
+          <p className="flex items-start gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800" role="status">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> {result.message}
+          </p>
+        ) : (
+          <p className="flex items-start gap-2 rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800" role="alert">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> {result.error}
+          </p>
+        ))}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
@@ -59,7 +97,9 @@ export function PandalProfileForm({ pandal }: { pandal: Pandal }) {
             <h2 className="font-serif text-xl font-semibold text-stone-950">Basic details</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="Pandal name"><Input value={draft.name} onChange={(event) => update("name", event.target.value)} required /></Field>
-              <Field label="Organising club"><Input value={draft.clubName} onChange={(event) => update("clubName", event.target.value)} required /></Field>
+              <Field label="Organising club" hint="The name PujaPass verified. Contact us to change it.">
+                <Input value={draft.clubName} readOnly disabled />
+              </Field>
               <Field label="Category">
                 <Select value={draft.category} onChange={(event) => update("category", event.target.value)}>
                   {[...new Set([draft.category, ...categories])].map((category) => <option key={category}>{category}</option>)}
@@ -72,6 +112,9 @@ export function PandalProfileForm({ pandal }: { pandal: Pandal }) {
               </Field>
               <Field label="Neighbourhood"><Input value={draft.neighbourhood} onChange={(event) => update("neighbourhood", event.target.value)} /></Field>
               <Field label="Timings"><Input value={draft.timings} onChange={(event) => update("timings", event.target.value)} /></Field>
+              <Field label="Highlight" hint="One line shown on your pandal card, e.g. “Chandannagar lighting across the whole lane”." className="sm:col-span-2">
+                <Input value={draft.highlight} maxLength={140} onChange={(event) => update("highlight", event.target.value)} />
+              </Field>
               <Field label="Full address" className="sm:col-span-2"><Input value={draft.address} onChange={(event) => update("address", event.target.value)} /></Field>
               <Field label="About the pandal" className="sm:col-span-2"><Textarea value={draft.description} onChange={(event) => update("description", event.target.value)} /></Field>
             </div>
@@ -104,11 +147,11 @@ export function PandalProfileForm({ pandal }: { pandal: Pandal }) {
                   </button>
                 </div>
               ))}
-              <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-stone-300 text-sm font-medium text-stone-500 hover:border-orange-400 hover:text-orange-700">
+              {/* TODO: photo uploads need file storage (e.g. Supabase Storage). */}
+              <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-stone-200 p-3 text-center text-sm font-medium text-stone-400">
                 <ImagePlus className="size-6" aria-hidden="true" />
-                Add photo
-                <input type="file" accept="image/*" className="sr-only" />
-              </label>
+                Photo uploads coming soon
+              </div>
             </div>
           </section>
 
@@ -160,9 +203,42 @@ export function PandalProfileForm({ pandal }: { pandal: Pandal }) {
         <aside className="space-y-3 xl:sticky xl:top-6 xl:h-fit">
           <p className="text-sm font-semibold text-stone-700">Live preview</p>
           <PandalCard pandal={{ ...draft, imageSrc: draft.gallery[0]?.src ?? draft.imageSrc }} />
-          <p className="text-xs text-stone-500">Listing status: <span className="font-semibold text-emerald-700">Published</span> · Verified on 12 Sep 2026</p>
+          {/* After a save, use the action's answer instead of waiting for the page to re-render. */}
+          <ListingStatus status={status} profileGaps={result?.ok ? result.profileGaps : profileGaps} />
         </aside>
       </div>
     </form>
+  );
+}
+
+function ListingStatus({ status, profileGaps }: { status: AdminPandalStatus; profileGaps: string[] }) {
+  if (status === "blocked") {
+    return (
+      <p className="flex gap-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">
+        <ShieldOff className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        Hidden from visitors: your club&apos;s verification is on hold. PujaPass will contact you.
+      </p>
+    );
+  }
+  if (status === "live") {
+    return (
+      <p className="flex gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
+        <Eye className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        Live: visitors can find and book your pandal.
+      </p>
+    );
+  }
+  return (
+    <div className="flex gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+      <CircleDashed className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      {profileGaps.length ? (
+        <p>
+          Draft, not visible to visitors yet. Fill in <span className="font-semibold">{profileGaps.join(", ").toLowerCase()}</span> and save. PujaPass then reviews and
+          publishes it.
+        </p>
+      ) : (
+        <p>Draft, not visible yet. Your profile is complete: PujaPass will review and publish it.</p>
+      )}
+    </div>
   );
 }

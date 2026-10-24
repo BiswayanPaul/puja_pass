@@ -18,7 +18,13 @@ export default function ClubPandalPage() {
 async function PandalProfile() {
   const access = await requireClubAccess(["OWNER", "ADMIN"], "/club/pandals");
   if (!access.ok) return <ClubAccessNotice reason={access.reason} />;
-  const pandal = access.pandalId ? await getClubPandal(access.pandalId) : null;
-  if (!pandal) return <ClubAccessNotice reason="no-pandal" />;
-  return <PandalProfileForm pandal={pandal} />;
+  const result = access.pandalId ? await getClubPandal(access.pandalId) : null;
+  if (!result) return <ClubAccessNotice reason="no-pandal" />;
+  return (
+    <PandalProfileForm
+      pandal={result.pandal}
+      status={!result.clubVerified ? "blocked" : result.published ? "live" : "draft"}
+      profileGaps={result.profileGaps}
+    />
+  );
 }

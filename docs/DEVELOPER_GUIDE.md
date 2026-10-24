@@ -59,7 +59,7 @@ Festival days are configured in `src/data/festival.ts` (currently Shashthi 28 Se
 | Club registration (4 steps) | ✅ | **PostgreSQL** (`ClubApplication`); documents keep file names only | File uploads (§12.6) |
 | Platform admin (`/admin`) | ✅ | **PostgreSQL**: review applications, verify/revoke clubs, publish/feature pandals; `PLATFORM_ADMIN` only | Audit log |
 | Club dashboard | ✅ | Slots/tiers from DB; KPIs, chart, check-ins are mock | Aggregate from DB (§12.5) |
-| Club pandal profile editor | ✅ | Reads DB; saves only to React state | Server Action + `revalidateTag` (§12.5) |
+| Club pandal profile editor | ✅ | **PostgreSQL** via `updatePandalProfile` (`src/features/club/actions.ts`); real Live/Draft status | Photo uploads (§12.5) |
 | Club tickets & slots | ✅ | Reads DB; edits only in React state | Server Actions (§12.5) |
 | Entry scanner | ✅ | Fully mock (`src/data/club.ts`) | Camera decoding + check-in API (§12.5) |
 | Saved pandals (heart) | ✅ | localStorage | `SavedPandal` table |
@@ -513,7 +513,7 @@ Also enforce per-tier capacity if you need it (today capacity is per slot = sum 
 
 ### 12.5 Club tools on real data
 
-- **Profile editor** (`pandal-profile-form.tsx`): Server Action to update `Pandal`, then `revalidateTag(pandalTags.pandal(slug))` and `revalidateTag(pandalTags.list)`. Add image upload (S3/R2/UploadThing) feeding `PandalImage`.
+- **Profile editor**: done. `updatePandalProfile` checks the member's club owns the pandal, validates, saves, and refreshes the public page (`updateTag`). Rules: the club name is read-only (it's what PujaPass verified); a **live** pandal can't be saved with required fields empty (`getProfileGaps`); the slug never changes. Drafts go live when a platform admin publishes them from `/admin/pandals` (they appear under "Ready to publish" once complete). Still to do: photo uploads (Supabase Storage/S3) feeding `PandalImage`; removing and reordering existing photos already saves.
 - **Tickets & slots** (`tickets-manager.tsx`): actions to create/update tiers, toggle `active`, edit `Slot.capacity` (never below `booked`) and `salesPaused`. Revalidate the tiers/slots tags.
 - **Dashboard:** replace `dailySales`, `tierSales`, `todayStats` and `recentCheckIns` with aggregates over `Pass` / `Payment` / `CheckIn` (use `cacheLife("minutes")`).
 - **QR codes:**
@@ -568,7 +568,7 @@ Still to do:
 | "Kolkata" dropdown in explorer hero does nothing | `pandal-explorer-hero.tsx` | Wire it to the area filter or remove it. |
 | "Theme / Style" and "Facilities" filter groups from the design aren't built | `filter-sidebar.tsx` | Data exists (`category`, `amenities`). |
 | "Near Me" uses a fake distance | `server/mappers.ts` | Derived from the stylised map position. |
-| Club edits are not saved | `pandal-profile-form.tsx`, `tickets-manager.tsx` | Local React state only (§12.5). |
+| Pass types and slot edits are not saved | `tickets-manager.tsx` | Local React state only (§12.5). The pandal profile does save. |
 | Club dashboard KPIs, chart, check-ins and scanner are mock | `src/data/club.ts` | `CLUB_TODAY` is fixed to Ashtami 2026-09-30. |
 | Emails are sent from a personal Gmail account | `.env` (`SMTP_*`) | Free stopgap capped at ~500/day. Buy a domain, verify it in Resend, then remove `SMTP_USER`/`SMTP_PASS` and set `EMAIL_FROM` to the domain. |
 | Booking reference can't be looked up by email | `/my-bookings` | "My bookings" lists bookings made in this browser; other devices need the emailed link until auth exists. |

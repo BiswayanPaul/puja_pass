@@ -31,7 +31,7 @@ export default function ClubDashboardPage() {
 async function Dashboard() {
   const access = await requireClubAccess(["OWNER", "ADMIN"], "/club/dashboard");
   if (!access.ok) return <ClubAccessNotice reason={access.reason} />;
-  const pandal = access.pandalId ? await getClubPandal(access.pandalId) : null;
+  const pandal = access.pandalId ? (await getClubPandal(access.pandalId))?.pandal : null;
   if (!pandal) return <ClubAccessNotice reason="no-pandal" />;
   // TODO: KPIs, the sales chart and check-ins below are still sample data (src/data/club.ts).
   const [todaySlots, tiers] = await Promise.all([getSlotsForPandal(pandal.id, CLUB_TODAY), getTiersForPandal(pandal.id)]);

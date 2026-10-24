@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { getProfileGaps } from "./admin";
 import { pandalInclude, toPandal } from "./mappers";
 
 // Reads for the club area. Unlike src/server/pandals.ts these include drafts
@@ -7,5 +8,12 @@ import { pandalInclude, toPandal } from "./mappers";
 
 export async function getClubPandal(pandalId: string) {
   const row = await prisma.pandal.findUnique({ where: { id: pandalId }, include: pandalInclude });
-  return row ? toPandal(row) : null;
+  if (!row) return null;
+  return {
+    pandal: toPandal(row),
+    published: row.published,
+    clubVerified: row.club.verified,
+    /** Required fields still empty; publishing is blocked until there are none. */
+    profileGaps: getProfileGaps(row),
+  };
 }
