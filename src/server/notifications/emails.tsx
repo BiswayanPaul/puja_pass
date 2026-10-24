@@ -1,7 +1,7 @@
 import { Body, Button, Container, Head, Heading, Hr, Html, Img, Link, Preview, Section, Text } from "@react-email/components";
 import type { CSSProperties, ReactNode } from "react";
 import { formatDate, formatINR, formatPujaDate, formatTimeRange } from "@/lib/format";
-import type { Booking } from "@/types";
+import type { Booking, PujaDay } from "@/types";
 
 // Email bodies. Email clients ignore most CSS, so styles are inline objects.
 
@@ -46,8 +46,10 @@ export function BookingConfirmedEmail({
   manageUrl,
   whatsappShareUrl,
   qrContentIds,
+  festivalDays,
 }: {
   booking: Booking;
+  festivalDays: PujaDay[];
   manageUrl: string;
   whatsappShareUrl: string;
   /** Pass code → content id of the inline QR image attachment. */
@@ -68,7 +70,7 @@ export function BookingConfirmedEmail({
           <Text style={styles.passTier}>{pass.tierName.toUpperCase()}</Text>
           <Text style={styles.passName}>{pass.pandal.name}</Text>
           <Text style={styles.small}>
-            {formatPujaDate(pass.date)} · {formatTimeRange(pass.startTime, pass.endTime)} · admits {pass.quantity}
+            {formatPujaDate(pass.date, festivalDays)} · {formatTimeRange(pass.startTime, pass.endTime)} · admits {pass.quantity}
           </Text>
           <Img src={`cid:${qrContentIds[pass.code]}`} width="168" height="168" alt={`QR code for pass ${pass.code}`} style={{ margin: "8px auto 0" }} />
           <Text style={styles.code}>{pass.code}</Text>

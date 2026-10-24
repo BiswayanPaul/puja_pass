@@ -10,6 +10,7 @@ import { PandalBenefits } from "./pandal-benefits";
 import { PandalCollection } from "./pandal-collection";
 import { PandalExplorerHero } from "./pandal-explorer-hero";
 import { formatPujaDate } from "@/lib/format";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import type { Pandal } from "@/types";
 
 const quickFilters: Record<string, (pandal: Pandal) => boolean> = {
@@ -29,6 +30,7 @@ const quickFilters: Record<string, (pandal: Pandal) => boolean> = {
 
 export function PandalExplorer({ pandals }: { pandals: Pandal[] }) {
   const searchParams = useSearchParams();
+  const festivalDays = useFestivalDays();
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [activeFilter, setActiveFilter] = useState("All Pandals");
   const [areas, setAreas] = useState<string[]>([]);
@@ -157,7 +159,7 @@ export function PandalExplorer({ pandals }: { pandals: Pandal[] }) {
                 title="All Pandals"
                 description={
                   date
-                    ? `Showing pandals open on ${formatPujaDate(date)}.`
+                    ? `Showing pandals open on ${formatPujaDate(date, festivalDays)}.`
                     : "Explore the complete list of pandals across Kolkata."
                 }
                 pandals={matchingPandals}

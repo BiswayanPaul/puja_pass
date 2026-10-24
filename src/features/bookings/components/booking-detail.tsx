@@ -20,6 +20,7 @@ import {
   XCircle,
 } from "lucide-react";
 import StatusBadge from "@/components/shared/StatusBadge";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import { formatDate, formatINR, formatPujaDate, formatTime, formatTimeRange } from "@/lib/format";
 import { bookingShareText, whatsappShareUrl } from "@/lib/share";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ const instructions = [
 ];
 
 function PassTicket({ pass }: { pass: Pass }) {
+  const days = useFestivalDays();
   const inactive = pass.status !== "valid";
   return (
     <article className={cn("relative flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm sm:flex-row print:break-inside-avoid", inactive && "opacity-70")}>
@@ -58,7 +60,7 @@ function PassTicket({ pass }: { pass: Pass }) {
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
           <div>
             <dt className="flex items-center gap-1 text-xs text-stone-500"><CalendarDays className="size-3.5" aria-hidden="true" />Date</dt>
-            <dd className="mt-0.5 font-semibold text-stone-900">{formatPujaDate(pass.date)}</dd>
+            <dd className="mt-0.5 font-semibold text-stone-900">{formatPujaDate(pass.date, days)}</dd>
           </div>
           <div>
             <dt className="flex items-center gap-1 text-xs text-stone-500"><Clock3 className="size-3.5" aria-hidden="true" />Entry window</dt>

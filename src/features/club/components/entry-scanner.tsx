@@ -1,199 +1,443 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { AlertTriangle, Camera, CameraOff, CheckCircle2, Keyboard, ScanLine, UsersRound, XCircle } from "lucide-react";
+import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import { AlertTriangle, Camera, CameraOff, CheckCircle2, Flashlight, FlashlightOff, Keyboard, Loader2, ScanLine, UsersRound, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/field";
-import { recentCheckIns, scannablePasses } from "@/data/club";
+import { useFestivalDays } from "@/features/festival/festival-context";
+import { formatPujaDate, formatTimeRange } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { CheckIn } from "@/types";
+import { admitPass, verifyScan, type PassTiming, type ScanResult } from "../scan-actions";
 import { ClubPageHeader } from "./club-shell";
 
-type ScanResult =
-  | { kind: "admitted" | "duplicate"; pass: (typeof scannablePasses)[number] }
-  | { kind: "invalid"; code: string };
+// The gate scanner. Reads QR codes with the phone's rear camera (the browser's
+// BarcodeDetector where available, otherwise jsQR), asks the server whether
+// the pass may enter, and admits it on a tap. Needs HTTPS (or localhost) for
+// camera access.
 
-const resultStyles = {
-  admitted: { title: "Valid pass", icon: CheckCircle2, className: "border-emerald-300 bg-emerald-50 text-emerald-950", iconClass: "text-emerald-600" },
-  duplicate: { title: "Already checked in", icon: AlertTriangle, className: "border-amber-300 bg-amber-50 text-amber-950", iconClass: "text-amber-600" },
-  invalid: { title: "Invalid pass", icon: XCircle, className: "border-rose-300 bg-rose-50 text-rose-950", iconClass: "text-rose-600" },
-};
+type DetectedBarcode = { rawValue: string };
+type BarcodeDetectorLike = { detect(source: CanvasImageSource): Promise<DetectedBarcode[]> };
+type BarcodeDetectorClass = (new (options: { formats: string[] }) => BarcodeDetectorLike) & { getSupportedFormats(): Promise<string[]> };
+type Decoder = (video: HTMLVideoElement) => Promise<string | null>;
 
-function nowTime() {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+/** Milliseconds between decode attempts. */
+const SCAN_INTERVAL = 150;
+/** The same QR code is ignored for this long after a result is dismissed, so it isn't read twice. */
+const REPEAT_COOLDOWN = 5000;
+
+async function createDecoder(canvas: HTMLCanvasElement): Promise<Decoder> {
+  const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorClass }).BarcodeDetector;
+  if (Detector && (await Detector.getSupportedFormats()).includes("qr_code")) {
+    const detector = new Detector({ formats: ["qr_code"] });
+    return async (video) => (await detector.detect(video))[0]?.rawValue ?? null;
+  }
+  // Safari on iPhone has no BarcodeDetector: decode frames ourselves.
+  const { default: jsQR } = await import("jsqr");
+  const context = canvas.getContext("2d", { willReadFrequently: true })!;
+  return async (video) => {
+    const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+    const width = Math.round(video.videoWidth * scale);
+    const height = Math.round(video.videoHeight * scale);
+    if (!width || !height) return null;
+    canvas.width = width;
+    canvas.height = height;
+    context.drawImage(video, 0, 0, width, height);
+    return jsQR(context.getImageData(0, 0, width, height).data, width, height, { inversionAttempts: "dontInvert" })?.data ?? null;
+  };
 }
 
-export function EntryScanner() {
-  const [cameraOn, setCameraOn] = useState(false);
-  const [code, setCode] = useState("");
-  const [usedCodes, setUsedCodes] = useState(() => scannablePasses.filter((pass) => pass.used).map((pass) => pass.code));
-  const [result, setResult] = useState<ScanResult | null>(null);
-  const [log, setLog] = useState<CheckIn[]>(recentCheckIns);
+type CameraState = { status: "off" | "starting" | "on" } | { status: "error"; message: string };
 
-  const verify = (raw: string) => {
-    const value = raw.trim().toUpperCase();
-    if (!value) return;
-    const pass = scannablePasses.find((item) => item.code === value);
-    const next: ScanResult = !pass ? { kind: "invalid", code: value } : { kind: usedCodes.includes(pass.code) ? "duplicate" : "admitted", pass };
-    setResult(next);
-    setCode("");
-    if (next.kind !== "admitted") {
-      setLog((entries) => [
-        {
-          id: `scan-${Date.now()}`,
-          passCode: value,
-          holderName: next.kind === "duplicate" ? next.pass.holderName : "Unknown",
-          tierName: next.kind === "duplicate" ? next.pass.tierName : "—",
-          quantity: next.kind === "duplicate" ? next.pass.quantity : 0,
-          time: nowTime(),
-          result: next.kind,
-        },
-        ...entries,
-      ]);
+/** Rear camera + QR decoding loop. Calls `onCode` once per code; call `resume()` to scan again. */
+function useQrCamera(onCode: (value: string) => void) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const pausedRef = useRef(false);
+  const lastCodeRef = useRef<{ value: string; at: number } | null>(null);
+  const onCodeRef = useRef(onCode);
+  const [camera, setCamera] = useState<CameraState>({ status: "off" });
+  const [torch, setTorch] = useState<{ available: boolean; on: boolean }>({ available: false, on: false });
+
+  useEffect(() => {
+    onCodeRef.current = onCode;
+  });
+
+  const stop = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setTorch({ available: false, on: false });
+    setCamera({ status: "off" });
+  };
+
+  // Decode loop while the camera is on.
+  useEffect(() => {
+    if (camera.status !== "on") return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    let decode: Decoder | null = null;
+    const tick = async () => {
+      if (cancelled) return;
+      const video = videoRef.current;
+      try {
+        decode ??= await createDecoder(canvasRef.current!);
+        if (!pausedRef.current && video && video.readyState >= 2) {
+          const value = await decode(video);
+          const last = lastCodeRef.current;
+          if (value && !(last && last.value === value && Date.now() - last.at < REPEAT_COOLDOWN)) {
+            pausedRef.current = true;
+            lastCodeRef.current = { value, at: Date.now() };
+            onCodeRef.current(value);
+          }
+        }
+      } catch {
+        // A frame that can't be decoded; try the next one.
+      }
+      timer = setTimeout(tick, SCAN_INTERVAL);
+    };
+    tick();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [camera.status]);
+
+  // Release the camera when leaving the page.
+  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
+
+  const start = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCamera({ status: "error", message: "This browser can't use the camera here. Open the scanner over HTTPS in Chrome or Safari." });
+      return;
+    }
+    setCamera({ status: "starting" });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      streamRef.current = stream;
+      const video = videoRef.current!;
+      video.srcObject = stream;
+      await video.play();
+      const capabilities = stream.getVideoTracks()[0]?.getCapabilities?.() as { torch?: boolean } | undefined;
+      setTorch({ available: Boolean(capabilities?.torch), on: false });
+      pausedRef.current = false;
+      setCamera({ status: "on" });
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      setCamera({
+        status: "error",
+        message:
+          name === "NotAllowedError"
+            ? "Camera access was blocked. Allow it for this site in your browser settings, then try again."
+            : name === "NotFoundError"
+              ? "No camera was found on this device."
+              : "The camera couldn't start. Close other apps using it and try again.",
+      });
     }
   };
 
-  const admit = () => {
-    if (result?.kind !== "admitted") return;
-    const { pass } = result;
-    setUsedCodes((codes) => [...codes, pass.code]);
-    setLog((entries) => [
-      { id: `scan-${Date.now()}`, passCode: pass.code, holderName: pass.holderName, tierName: pass.tierName, quantity: pass.quantity, time: nowTime(), result: "admitted" },
-      ...entries,
-    ]);
+  const toggleTorch = async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    const on = !torch.on;
+    await track.applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet] }).catch(() => undefined);
+    setTorch((current) => ({ ...current, on }));
+  };
+
+  const resume = () => {
+    if (lastCodeRef.current) lastCodeRef.current.at = Date.now();
+    pausedRef.current = false;
+  };
+
+  return { videoRef, canvasRef, camera, start, stop, resume, torch, toggleTorch };
+}
+
+const timingNotes: Record<Exclude<PassTiming, "on-time">, string> = {
+  early: "This visitor is early for their entry window.",
+  late: "This visitor's entry window has already ended.",
+  "other-day": "This pass is for a different day.",
+};
+
+const logStyles = {
+  admitted: { label: "Admitted", icon: CheckCircle2, className: "text-emerald-600" },
+  duplicate: { label: "Already used", icon: AlertTriangle, className: "text-amber-600" },
+  invalid: { label: "Invalid", icon: XCircle, className: "text-rose-600" },
+};
+
+type Shown = ScanResult | { kind: "admitted"; pass: Extract<ScanResult, { kind: "valid" }>["pass"] } | { kind: "error"; reason: string };
+
+export function EntryScanner({ initialLog }: { initialLog: CheckIn[] }) {
+  const days = useFestivalDays();
+  const [result, setResult] = useState<Shown | null>(null);
+  const [log, setLog] = useState(initialLog);
+  const [session, setSession] = useState({ admitted: 0, scanned: 0, rejected: 0 });
+  const [code, setCode] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const record = (entry: CheckIn | null) => {
+    if (entry) setLog((current) => [entry, ...current.filter((item) => item.id !== entry.id)].slice(0, 30));
+  };
+
+  const check = (raw: string) =>
+    startTransition(async () => {
+      try {
+        const outcome = await verifyScan(raw);
+        setResult(outcome);
+        setSession((current) => ({ ...current, scanned: current.scanned + 1, rejected: current.rejected + (outcome.kind === "valid" ? 0 : 1) }));
+        if (outcome.kind !== "valid") record(outcome.log);
+        navigator.vibrate?.(outcome.kind === "valid" ? 80 : [60, 40, 60]);
+      } catch {
+        setResult({ kind: "error", reason: "Couldn't reach PujaPass. Check the phone's internet connection and scan again." });
+      }
+    });
+
+  const { videoRef, canvasRef, camera, start, stop, resume, torch, toggleTorch } = useQrCamera(check);
+
+  const next = () => {
     setResult(null);
+    resume();
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const admit = (override: boolean) => {
+    if (result?.kind !== "valid") return;
+    const passId = result.pass.id;
+    startTransition(async () => {
+      try {
+        const outcome = await admitPass(passId, override);
+        if (outcome.kind === "error") return setResult(outcome);
+        record(outcome.log);
+        if (outcome.kind === "admitted") {
+          setSession((current) => ({ ...current, admitted: current.admitted + outcome.pass.quantity }));
+          navigator.vibrate?.(150);
+        }
+        setResult(outcome);
+      } catch {
+        setResult({ kind: "error", reason: "Couldn't reach PujaPass. The visitor was not checked in; try again." });
+      }
+    });
+  };
+
+  const handleManual = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    verify(code);
+    if (!code.trim()) return;
+    check(code);
+    setCode("");
   };
-
-  const admittedPeople = log.filter((entry) => entry.result === "admitted").reduce((total, entry) => total + entry.quantity, 0);
-  const rejected = log.filter((entry) => entry.result !== "admitted").length;
-  const style = result ? resultStyles[result.kind] : null;
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
-      <ClubPageHeader title="Entry scanner" description="Scan visitor QR passes at the PujaPass lane. Works on any phone or tablet." />
+    <div className="space-y-5 p-4 sm:p-6 lg:p-8">
+      <ClubPageHeader title="Entry scanner" description="Scan visitors' QR passes at the PujaPass lane with this phone's camera." />
 
-      <dl className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Admitted this session", value: admittedPeople },
-          { label: "Passes scanned", value: log.length },
-          { label: "Rejected", value: rejected },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-2xl border border-stone-200 bg-white p-4">
-            <dt className="text-xs text-stone-500 sm:text-sm">{label}</dt>
-            <dd className="mt-1 font-serif text-2xl font-semibold text-stone-950 sm:text-3xl">{value}</dd>
-          </div>
-        ))}
-      </dl>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section className="space-y-4">
-          <div className="relative aspect-4/3 overflow-hidden rounded-2xl bg-stone-900">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_60%)]" />
-            <div className="absolute inset-[18%] rounded-2xl">
+          <div className="relative aspect-square overflow-hidden rounded-2xl bg-stone-900 sm:aspect-4/3">
+            <video ref={videoRef} playsInline muted className={cn("absolute inset-0 size-full object-cover", camera.status !== "on" && "hidden")} />
+            <canvas ref={canvasRef} className="hidden" />
+            <div className="pointer-events-none absolute inset-[15%] rounded-2xl">
               {["left-0 top-0 border-l-4 border-t-4 rounded-tl-2xl", "right-0 top-0 border-r-4 border-t-4 rounded-tr-2xl", "bottom-0 left-0 border-b-4 border-l-4 rounded-bl-2xl", "bottom-0 right-0 border-b-4 border-r-4 rounded-br-2xl"].map((corner) => (
                 <span key={corner} className={cn("absolute size-10 border-orange-500", corner)} />
               ))}
-              {cameraOn && <span className="absolute inset-x-3 h-0.5 animate-scan bg-orange-400 shadow-[0_0_16px_4px_rgba(251,146,60,0.6)]" />}
+              {camera.status === "on" && !result && <span className="absolute inset-x-3 h-0.5 animate-scan bg-orange-400 shadow-[0_0_16px_4px_rgba(251,146,60,0.6)]" />}
             </div>
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-linear-to-t from-black/80 to-transparent p-4">
-              <p className="text-sm text-stone-200">{cameraOn ? "Point the camera at a PujaPass QR code" : "Camera is off"}</p>
+            {camera.status !== "on" && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-stone-200">
+                {camera.status === "error" ? (
+                  <>
+                    <CameraOff className="size-9 text-rose-300" aria-hidden="true" />
+                    <p className="max-w-xs text-sm">{camera.message}</p>
+                  </>
+                ) : (
+                  <>
+                    <ScanLine className="size-9 text-orange-300" aria-hidden="true" />
+                    <p className="max-w-xs text-sm">Start the camera, then hold the visitor&apos;s QR code inside the frame.</p>
+                  </>
+                )}
+              </div>
+            )}
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-linear-to-t from-black/80 to-transparent p-3">
+              {torch.available ? (
+                <button type="button" onClick={toggleTorch} aria-pressed={torch.on} aria-label={torch.on ? "Turn torch off" : "Turn torch on"} className="flex size-11 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25">
+                  {torch.on ? <FlashlightOff className="size-5" /> : <Flashlight className="size-5" />}
+                </button>
+              ) : (
+                <span />
+              )}
               <button
                 type="button"
-                onClick={() => setCameraOn((value) => !value)}
-                className={cn("inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold", cameraOn ? "bg-white/15 text-white hover:bg-white/25" : "bg-orange-600 text-white hover:bg-orange-700")}
+                onClick={camera.status === "on" ? stop : start}
+                disabled={camera.status === "starting"}
+                className={cn("inline-flex min-h-11 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold disabled:opacity-70", camera.status === "on" ? "bg-white/15 text-white hover:bg-white/25" : "bg-orange-600 text-white hover:bg-orange-700")}
               >
-                {cameraOn ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
-                {cameraOn ? "Stop" : "Start camera"}
+                {camera.status === "starting" ? <Loader2 className="size-4 animate-spin" /> : camera.status === "on" ? <CameraOff className="size-4" /> : <Camera className="size-4" />}
+                {camera.status === "on" ? "Stop camera" : camera.status === "error" ? "Try again" : "Start camera"}
               </button>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex gap-2">
+          <div aria-live="polite">
+            {pending && !result ? (
+              <p className="flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white p-6 text-sm text-stone-600">
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Checking pass…
+              </p>
+            ) : result ? (
+              <ResultCard result={result} pending={pending} days={days} onAdmit={admit} onNext={next} />
+            ) : null}
+          </div>
+
+          <form onSubmit={handleManual} className="flex gap-2">
             <label className="relative flex-1">
               <span className="sr-only">Pass code</span>
               <Keyboard className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-400" aria-hidden="true" />
-              <Input value={code} onChange={(event) => setCode(event.target.value)} placeholder="Enter pass code, e.g. SRB-2930-8841" className="pl-9 font-mono uppercase" />
+              <Input value={code} onChange={(event) => setCode(event.target.value)} placeholder="Or type the code under the QR" autoCapitalize="characters" className="pl-9 font-mono uppercase placeholder:font-sans placeholder:normal-case" />
             </label>
-            <button type="submit" className="rounded-lg bg-stone-950 px-5 text-sm font-semibold text-white hover:bg-stone-800">Verify</button>
+            <button type="submit" disabled={pending} className="rounded-lg bg-stone-950 px-5 text-sm font-semibold text-white hover:bg-stone-800 disabled:opacity-60">Check</button>
           </form>
-
-          <div className="rounded-xl border border-dashed border-stone-300 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Demo: simulate a scan</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {[...scannablePasses.map((pass) => pass.code), "XYZ-0000-0000"].map((sample) => (
-                <button key={sample} type="button" onClick={() => verify(sample)} className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1.5 font-mono text-xs text-stone-700 hover:bg-orange-50 hover:text-orange-700">
-                  <ScanLine className="size-3.5" aria-hidden="true" /> {sample}
-                </button>
-              ))}
-            </div>
-          </div>
         </section>
 
         <section className="space-y-4">
-          <div aria-live="polite">
-            {result && style ? (
-              <div className={cn("rounded-2xl border-2 p-6", style.className)}>
-                <div className="flex items-center gap-3">
-                  <style.icon className={cn("size-9", style.iconClass)} aria-hidden="true" />
-                  <div>
-                    <p className="font-serif text-2xl font-semibold">{style.title}</p>
-                    <p className="font-mono text-sm opacity-70">{result.kind === "invalid" ? result.code : result.pass.code}</p>
-                  </div>
-                </div>
-                {result.kind === "invalid" ? (
-                  <p className="mt-4 text-sm">This code does not match any pass for your pandal. Ask the visitor to show the booking on the PujaPass app, or direct them to the free-entry gate.</p>
-                ) : (
-                  <>
-                    <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
-                      <div><dt className="opacity-70">Visitor</dt><dd className="font-semibold">{result.pass.holderName}</dd></div>
-                      <div><dt className="opacity-70">Pass type</dt><dd className="font-semibold">{result.pass.tierName}</dd></div>
-                      <div><dt className="opacity-70">Slot</dt><dd className="font-semibold">{result.pass.slot}</dd></div>
-                      <div><dt className="opacity-70">Admits</dt><dd className="flex items-center gap-1 font-semibold"><UsersRound className="size-4" aria-hidden="true" />{result.pass.quantity}</dd></div>
-                    </dl>
-                    {result.kind === "admitted" ? (
-                      <div className="mt-6 flex gap-2">
-                        <button type="button" onClick={admit} className="flex-1 rounded-full bg-emerald-600 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-700">
-                          Admit {result.pass.quantity} {result.pass.quantity === 1 ? "visitor" : "visitors"}
-                        </button>
-                        <button type="button" onClick={() => setResult(null)} className="rounded-full px-4 py-3 text-sm font-semibold hover:bg-white/60">Dismiss</button>
-                      </div>
-                    ) : (
-                      <p className="mt-4 text-sm">This pass has already been used. Check the visitor&apos;s ID before allowing re-entry.</p>
-                    )}
-                  </>
-                )}
+          <dl className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Admitted", value: session.admitted },
+              { label: "Scanned", value: session.scanned },
+              { label: "Rejected", value: session.rejected },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-2xl border border-stone-200 bg-white p-4">
+                <dt className="text-xs text-stone-500">{label} <span className="sr-only">this session</span></dt>
+                <dd className="mt-1 font-serif text-2xl font-semibold text-stone-950">{value}</dd>
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-300 bg-white px-6 py-12 text-center">
-                <ScanLine className="size-10 text-stone-300" aria-hidden="true" />
-                <p className="mt-3 font-semibold text-stone-800">Waiting for a scan</p>
-                <p className="mt-1 text-sm text-stone-500">Results will appear here.</p>
-              </div>
-            )}
-          </div>
+            ))}
+          </dl>
+          <p className="-mt-2 text-xs text-stone-500">Counts for this scanning session; the dashboard shows the day&apos;s totals.</p>
 
           <div className="rounded-2xl border border-stone-200 bg-white p-5">
-            <h2 className="font-serif text-xl font-semibold text-stone-950">Scan history</h2>
-            <ul className="mt-3 max-h-80 divide-y divide-stone-100 overflow-y-auto">
-              {log.map((entry) => {
-                const entryStyle = resultStyles[entry.result];
-                return (
-                  <li key={entry.id} className="flex items-center gap-3 py-2.5 text-sm">
-                    <entryStyle.icon className={cn("size-4 shrink-0", entryStyle.iconClass)} aria-label={entryStyle.title} />
-                    <span className="w-12 shrink-0 text-stone-500">{entry.time}</span>
-                    <span className="min-w-0 flex-1 truncate font-medium text-stone-900">{entry.holderName}</span>
-                    <span className="hidden font-mono text-xs text-stone-500 sm:block">{entry.passCode}</span>
-                  </li>
-                );
-              })}
-            </ul>
+            <h2 className="font-serif text-xl font-semibold text-stone-950">Recent scans</h2>
+            {log.length ? (
+              <ul className="mt-3 max-h-96 divide-y divide-stone-100 overflow-y-auto">
+                {log.map((entry) => {
+                  const style = logStyles[entry.result];
+                  return (
+                    <li key={entry.id} className="flex items-center gap-3 py-2.5 text-sm">
+                      <style.icon className={cn("size-4 shrink-0", style.className)} aria-label={style.label} />
+                      <span className="w-24 shrink-0 text-stone-500">{entry.time}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium text-stone-900">{entry.holderName}{entry.quantity ? ` · ${entry.quantity}` : ""}</span>
+                      <span className="hidden font-mono text-xs text-stone-500 sm:block">{entry.passCode}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-stone-500">No scans yet.</p>
+            )}
           </div>
         </section>
+      </div>
+    </div>
+  );
+}
+
+function ResultCard({
+  result,
+  pending,
+  days,
+  onAdmit,
+  onNext,
+}: {
+  result: Shown;
+  pending: boolean;
+  days: ReturnType<typeof useFestivalDays>;
+  onAdmit: (override: boolean) => void;
+  onNext: () => void;
+}) {
+  const nextButton = (
+    <button type="button" onClick={onNext} className="min-h-12 flex-1 rounded-full border border-current/20 bg-white/70 px-5 py-3 text-sm font-bold hover:bg-white">
+      Scan next
+    </button>
+  );
+
+  if (result.kind === "invalid" || result.kind === "error") {
+    return (
+      <div className="rounded-2xl border-2 border-rose-300 bg-rose-50 p-5 text-rose-950">
+        <div className="flex items-center gap-3">
+          <XCircle className="size-9 shrink-0 text-rose-600" aria-hidden="true" />
+          <div>
+            <p className="font-serif text-2xl font-semibold">{result.kind === "error" ? "Not checked in" : "Not valid"}</p>
+            {result.kind === "invalid" && result.code && <p className="font-mono text-sm opacity-70">{result.code}</p>}
+          </div>
+        </div>
+        <p className="mt-3 text-sm">{result.reason}</p>
+        {result.kind === "invalid" && <p className="mt-1 text-sm opacity-80">Direct the visitor to the free-entry gate, or ask them to show the booking email.</p>}
+        <div className="mt-4 flex">{nextButton}</div>
+      </div>
+    );
+  }
+
+  const { pass } = result;
+  const details = (
+    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+      <div><dt className="opacity-70">Visitor</dt><dd className="font-semibold">{pass.holderName}</dd></div>
+      <div><dt className="opacity-70">Pass type</dt><dd className="font-semibold">{pass.tierName}</dd></div>
+      <div><dt className="opacity-70">Entry window</dt><dd className="font-semibold">{formatPujaDate(pass.date, days)}, {formatTimeRange(pass.startTime, pass.endTime)}</dd></div>
+      <div><dt className="opacity-70">Admits</dt><dd className="flex items-center gap-1 text-lg font-bold"><UsersRound className="size-4" aria-hidden="true" />{pass.quantity}</dd></div>
+    </dl>
+  );
+
+  if (result.kind === "admitted") {
+    return (
+      <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-5 text-emerald-950">
+        <div className="flex items-center gap-3">
+          <CheckCircle2 className="size-9 shrink-0 text-emerald-600" aria-hidden="true" />
+          <div>
+            <p className="font-serif text-2xl font-semibold">Admitted {pass.quantity} {pass.quantity === 1 ? "visitor" : "visitors"}</p>
+            <p className="font-mono text-sm opacity-70">{pass.code}</p>
+          </div>
+        </div>
+        {details}
+        <div className="mt-4 flex">{nextButton}</div>
+      </div>
+    );
+  }
+
+  if (result.kind === "duplicate") {
+    return (
+      <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 text-amber-950">
+        <div className="flex items-center gap-3">
+          <AlertTriangle className="size-9 shrink-0 text-amber-600" aria-hidden="true" />
+          <div>
+            <p className="font-serif text-2xl font-semibold">Already checked in</p>
+            <p className="font-mono text-sm opacity-70">{pass.code}{result.checkedInAt && ` · at ${result.checkedInAt}`}</p>
+          </div>
+        </div>
+        {details}
+        <p className="mt-3 text-sm">Each pass works once. Check the visitor&apos;s booking email before letting anyone back in.</p>
+        <div className="mt-4 flex">{nextButton}</div>
+      </div>
+    );
+  }
+
+  const outOfWindow = result.timing !== "on-time";
+  return (
+    <div className={cn("rounded-2xl border-2 p-5", outOfWindow ? "border-amber-300 bg-amber-50 text-amber-950" : "border-emerald-300 bg-emerald-50 text-emerald-950")}>
+      <div className="flex items-center gap-3">
+        {outOfWindow ? <AlertTriangle className="size-9 shrink-0 text-amber-600" aria-hidden="true" /> : <CheckCircle2 className="size-9 shrink-0 text-emerald-600" aria-hidden="true" />}
+        <div>
+          <p className="font-serif text-2xl font-semibold">{outOfWindow ? "Valid, outside its window" : "Valid pass"}</p>
+          <p className="font-mono text-sm opacity-70">{pass.code}</p>
+        </div>
+      </div>
+      {details}
+      {result.timing !== "on-time" && <p className="mt-3 text-sm font-medium">{timingNotes[result.timing]}</p>}
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          onClick={() => onAdmit(outOfWindow)}
+          disabled={pending}
+          className={cn("inline-flex min-h-12 flex-2 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold text-white disabled:opacity-70", outOfWindow ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700")}
+        >
+          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          {outOfWindow ? "Admit anyway" : `Admit ${pass.quantity} ${pass.quantity === 1 ? "visitor" : "visitors"}`}
+        </button>
+        <button type="button" onClick={onNext} disabled={pending} className="min-h-12 flex-1 rounded-full px-4 py-3 text-sm font-semibold hover:bg-white/60">
+          Don&apos;t admit
+        </button>
       </div>
     </div>
   );

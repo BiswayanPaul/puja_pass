@@ -7,6 +7,7 @@ import { ArrowRight, CalendarDays, Ticket } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import StatusBadge from "@/components/shared/StatusBadge";
 import { useCurrentUser } from "@/features/auth/use-session";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import { useIsClient } from "@/lib/create-store";
 import { formatDate, formatINR, formatPujaDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ const tabs: { label: string; statuses: BookingStatus[] }[] = [
 ];
 
 function BookingCard({ booking }: { booking: BookingSummary }) {
+  const days = useFestivalDays();
   return (
     <article className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition-shadow hover:shadow-md">
       <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
@@ -37,7 +39,7 @@ function BookingCard({ booking }: { booking: BookingSummary }) {
             <StatusBadge status={booking.status} />
           </div>
           <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-stone-500">
-            <span className="inline-flex items-center gap-1"><CalendarDays className="size-4" aria-hidden="true" />{booking.dates.map((date) => formatPujaDate(date)).join(", ")}</span>
+            <span className="inline-flex items-center gap-1"><CalendarDays className="size-4" aria-hidden="true" />{booking.dates.map((date) => formatPujaDate(date, days)).join(", ")}</span>
             <span className="inline-flex items-center gap-1"><Ticket className="size-4" aria-hidden="true" />{booking.passCount} {booking.passCount === 1 ? "pass" : "passes"} · {booking.visitors} visitors</span>
           </p>
         </div>

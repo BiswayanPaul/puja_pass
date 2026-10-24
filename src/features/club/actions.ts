@@ -2,12 +2,12 @@
 
 import { refresh, updateTag } from "next/cache";
 import { z } from "zod";
-import { pujaDays } from "@/data/festival";
-import { areas } from "@/data/pandals";
+import { areas } from "@/data/areas";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getProfileGaps } from "@/server/admin";
 import { requireClubAccess } from "@/server/auth/session";
+import { getFestivalDays } from "@/server/festival";
 import { pandalTags } from "@/server/pandals";
 
 export type SaveProfileResult = { ok: true; message: string; profileGaps: string[] } | { ok: false; error: string };
@@ -166,10 +166,7 @@ const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use 24-hour times li
 
 const addSlotsSchema = z.object({
   pandalId: z.string().min(1),
-  dates: z
-    .array(z.string())
-    .min(1, "Pick at least one day.")
-    .refine((dates) => dates.every((date) => pujaDays.some((day) => day.date === date)), "Pick festival days only."),
+  dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1, "Pick at least one day."),
   windows: z
     .array(z.object({ start: time, end: time }).refine((window) => window.end > window.start, "Each window must end after it starts (same day)."))
     .min(1, "Pick at least one entry window.")
@@ -183,6 +180,8 @@ export async function addSlots(input: z.input<typeof addSlotsSchema>): Promise<C
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the form and try again." };
   const { pandalId, dates, windows, capacity } = parsed.data;
   if (!(await canManage(pandalId))) return notYours;
+  const festivalDays = await getFestivalDays();
+  if (!dates.every((date) => festivalDays.some((day) => day.date === date))) return { ok: false, error: "Pick festival days only." };
 
   const rows = dates.flatMap((date) =>
     windows.map((window) => ({ pandalId, date: new Date(`${date}T00:00:00Z`), startTime: window.start, endTime: window.end, capacity })),

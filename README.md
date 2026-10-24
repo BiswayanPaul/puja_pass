@@ -41,7 +41,7 @@ bun install                 # also generates the Prisma client
 cp .env.example .env        # set DATABASE_URL
 createdb puja_pass          # if using local PostgreSQL
 bun run db:migrate          # apply migrations
-bun run db:seed             # load sample pandals, slots and bookings
+bun run db:seed             # DEV ONLY: wipes the DB, adds festival days + a demo pandal
 bun run dev                 # http://localhost:3000
 ```
 
@@ -57,7 +57,9 @@ Sign-in is passwordless (Google or an emailed link) via Auth.js. Sign in with yo
 | `bun run build` / `bun run start` | Production build / server (the build needs database access) |
 | `bun run lint` | ESLint |
 | `bun run db:migrate` | Create and apply a migration after editing `prisma/schema.prisma` |
-| `bun run db:seed` | Reset all tables and reload the sample data (development only) |
+| `bun run db:seed` | Wipe a development database and load festival days + the demo pandal |
+| `bun run demo:seed <email>` | Build the demo pandal on any database, owned by `<email>` (removes the old sample pandals) |
+| `bun run admin:grant <email>` | Make an account a platform admin |
 | `bun run db:reset` | Drop, re-migrate and re-seed the database |
 | `bun run db:studio` | Open Prisma Studio |
 | `bun run db:deploy` | Apply migrations in production |
@@ -71,7 +73,7 @@ src/components/    Layout, shared sections and UI primitives
 src/features/      Feature modules (pandals, trail, checkout, bookings, auth, club)
 src/server/        Server-only database queries (Prisma, cached with 'use cache')
 src/lib/           Prisma client, formatting helpers, client-side stores
-src/data/          Sample data (seed source; some features still read it directly)
+src/data/          Settings: standard entry windows, fees, areas
 src/types/         Shared domain types
 ```
 

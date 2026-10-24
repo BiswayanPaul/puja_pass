@@ -8,6 +8,7 @@ import { MAX_PASSES_PER_SLOT } from "@/data/festival";
 import { PandalCard } from "@/features/pandals/components/pandal-card";
 import type { Pandal } from "@/types";
 import { formatINR, formatPujaDate, formatTimeRange } from "@/lib/format";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import { clearTrail, removeFromTrail, updateTrailQuantity, useTrail, type TrailLine } from "../use-trail";
 import { TrailSummary } from "./trail-summary";
 
@@ -19,6 +20,7 @@ function groupByDate(lines: TrailLine[]) {
 
 export function TrailView({ suggestions }: { suggestions: Pandal[] }) {
   const trail = useTrail();
+  const days = useFestivalDays();
 
   if (!trail.lines.length) {
     return (
@@ -50,7 +52,7 @@ export function TrailView({ suggestions }: { suggestions: Pandal[] }) {
           <section key={date}>
             <h2 className="flex items-center gap-3 font-serif text-2xl font-semibold text-stone-950">
               <span className="size-3 rounded-full bg-orange-600 ring-4 ring-orange-100" aria-hidden="true" />
-              {formatPujaDate(date)}
+              {formatPujaDate(date, days)}
             </h2>
             <ol className="mt-4 space-y-3 border-l-2 border-dashed border-orange-200 pl-5 ml-1.5">
               {lines.map((line) => {

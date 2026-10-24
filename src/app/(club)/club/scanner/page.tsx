@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { ClubAccessNotice, ClubPageSkeleton } from "@/features/club/components/club-access-notice";
 import { EntryScanner } from "@/features/club/components/entry-scanner";
 import { requireClubAccess } from "@/server/auth/session";
+import { getRecentCheckIns } from "@/server/club-stats";
 
 export const metadata: Metadata = { title: "Entry scanner", robots: { index: false } };
 
@@ -17,6 +18,6 @@ export default function ClubScannerPage() {
 async function Scanner() {
   const access = await requireClubAccess(["OWNER", "ADMIN", "SCANNER"], "/club/scanner");
   if (!access.ok) return <ClubAccessNotice reason={access.reason} />;
-  // TODO: the scanner still checks sample passes (src/data/club.ts); wire it to verifyPassToken and check-in.
-  return <EntryScanner />;
+  if (!access.pandalId) return <ClubAccessNotice reason="no-pandal" />;
+  return <EntryScanner initialLog={await getRecentCheckIns(access.pandalId, 30)} />;
 }

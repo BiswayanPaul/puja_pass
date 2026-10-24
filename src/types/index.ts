@@ -167,18 +167,6 @@ export type BookingSummary = {
   href: string;
 };
 
-export type UserRole = "visitor" | "club_admin";
-
-export type User = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  role: UserRole;
-  /** Set for club admins: the pandal they manage. */
-  pandalId?: string;
-};
-
 export type CheckIn = {
   id: string;
   passCode: string;

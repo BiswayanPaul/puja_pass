@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState, useTransition, type FormEvent } from "react";
 import { CheckCircle2, CircleDashed, ExternalLink, Eye, ImagePlus, Leaf, Loader2, ShieldOff, TriangleAlert, X } from "lucide-react";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { areas } from "@/data/pandals";
+import { areas } from "@/data/areas";
 import { PandalCard } from "@/features/pandals/components/pandal-card";
 import { cn } from "@/lib/utils";
 import type { AdminPandalStatus, Area, Pandal } from "@/types";

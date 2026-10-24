@@ -7,6 +7,7 @@ import type { CrowdLevel } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { getProfileGaps } from "@/server/admin";
 import { requirePlatformAdmin } from "@/server/auth/session";
+import { festivalTag } from "@/server/festival";
 import { pandalTags } from "@/server/pandals";
 
 export type ActionResult =
@@ -387,4 +388,42 @@ export async function setPandalFeatured(
       ? "Added to featured pandals."
       : "Removed from featured pandals.",
   };
+}
+
+// ─── Festival days ──────────────────────────────────────────────────────────
+
+const festivalDaySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date."),
+  label: z.string().trim().min(2, "Name the day, e.g. Ashtami.").max(30),
+});
+
+/** Adds a festival day, or renames it if the date is already one. */
+export async function saveFestivalDay(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  await requirePlatformAdmin();
+  const input = parse(festivalDaySchema, formData);
+  if (!input.ok) return fail(input.error);
+  const date = new Date(`${input.data.date}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return fail("Pick a valid date.");
+
+  await prisma.festivalDay.upsert({ where: { date }, update: { label: input.data.label }, create: { date, label: input.data.label } });
+  updateTag(festivalTag);
+  refresh();
+  return { ok: true, message: `${input.data.label} saved.` };
+}
+
+const removeDaySchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
+
+/** Removes a festival day. Refused while visitors hold valid passes for it. */
+export async function removeFestivalDay(_: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  await requirePlatformAdmin();
+  const input = parse(removeDaySchema, formData);
+  if (!input.ok) return fail(input.error);
+  const date = new Date(`${input.data.date}T00:00:00Z`);
+
+  const passes = await prisma.pass.count({ where: { status: "VALID", slot: { date } } });
+  if (passes) return fail(`Visitors hold ${passes} valid ${passes === 1 ? "pass" : "passes"} for this day. Cancel those bookings first.`);
+  await prisma.festivalDay.deleteMany({ where: { date } });
+  updateTag(festivalTag);
+  refresh();
+  return { ok: true, message: "Day removed. Entry windows on it are no longer offered to visitors." };
 }

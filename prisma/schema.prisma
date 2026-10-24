@@ -237,6 +237,15 @@ model ClubApplication {
   @@index([status])
 }
 
+// ─── Festival ─────────────────────────────────────────────────────────────────
+
+/// One day of the Puja season (e.g. 2027-10-14 "Shashthi"). Platform admins
+/// set these in /admin/festival; visitors and clubs can only use these days.
+model FestivalDay {
+  date  DateTime @id @db.Date
+  label String
+}
+
 // ─── Pandals ──────────────────────────────────────────────────────────────────
 
 model Pandal {

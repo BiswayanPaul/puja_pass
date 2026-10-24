@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, FileUp, Loader2, LogIn } from "lucide-react";
 import { Checkbox, Field, Input, Select, Textarea } from "@/components/ui/field";
-import { areas } from "@/data/pandals";
+import { areas } from "@/data/areas";
 import { submitClubApplication } from "@/features/auth/actions";
 import { useCurrentUser } from "@/features/auth/use-session";
 import { cn } from "@/lib/utils";

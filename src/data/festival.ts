@@ -1,17 +1,4 @@
-import type { PujaDay } from "@/types";
-
-export const FESTIVAL_YEAR = 2026;
-
-export const pujaDays: PujaDay[] = [
-  { date: "2026-09-28", label: "Shashthi", weekday: "Mon" },
-  { date: "2026-09-29", label: "Saptami", weekday: "Tue" },
-  { date: "2026-09-30", label: "Ashtami", weekday: "Wed" },
-  { date: "2026-10-01", label: "Navami", weekday: "Thu" },
-  { date: "2026-10-02", label: "Dashami", weekday: "Fri" },
-];
-
-export const FESTIVAL_START = pujaDays[0].date;
-export const FESTIVAL_END = pujaDays[pujaDays.length - 1].date;
+// Booking settings. Festival days live in the database (see src/server/festival.ts).
 
 /** Hourly entry windows offered by ticketed pandals. */
 export const slotTimes: [start: string, end: string][] = [

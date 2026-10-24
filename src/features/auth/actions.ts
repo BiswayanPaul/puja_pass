@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { z } from "zod";
 import { signIn } from "@/auth";
-import { areas } from "@/data/pandals";
+import { areas } from "@/data/areas";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/server/auth/session";
 import { HOUR, rateLimit } from "@/server/rate-limit";

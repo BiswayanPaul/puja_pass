@@ -7,7 +7,8 @@ import { formatPujaDate, formatTimeRange } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { verifyPassToken } from "@/server/booking-links";
 import { getPassCheck } from "@/server/bookings";
-import type { PassCheck } from "@/types";
+import { getFestivalDays } from "@/server/festival";
+import type { PassCheck, PujaDay } from "@/types";
 
 // Opens when anyone scans a pass QR code with a phone camera. It confirms the
 // pass is genuine and shows its state; it never shows the booker's details.
@@ -47,10 +48,10 @@ async function PassResult({ params }: { params: PageProps<"/p/[token]">["params"
     );
   }
 
-  return <PassCard pass={pass} />;
+  return <PassCard pass={pass} festivalDays={await getFestivalDays()} />;
 }
 
-function PassCard({ pass }: { pass: PassCheck }) {
+function PassCard({ pass, festivalDays }: { pass: PassCheck; festivalDays: PujaDay[] }) {
   const status = {
     valid: { tone: "success", icon: CheckCircle2, title: "Valid pass", detail: "Show this QR code at the PujaPass entry lane. One scan admits everyone on the pass." },
     used: {
@@ -70,7 +71,7 @@ function PassCard({ pass }: { pass: PassCheck }) {
         <h3 className="mt-1 font-serif text-2xl font-semibold text-stone-950">{pass.pandal.name}</h3>
         <p className="text-sm text-stone-500">{pass.pandal.neighbourhood}</p>
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
-          <Detail icon={CalendarDays} label="Date" value={formatPujaDate(pass.date)} />
+          <Detail icon={CalendarDays} label="Date" value={formatPujaDate(pass.date, festivalDays)} />
           <Detail icon={Clock3} label="Entry window" value={formatTimeRange(pass.startTime, pass.endTime)} />
           <Detail icon={UsersRound} label="Admits" value={`${pass.quantity} ${pass.quantity === 1 ? "person" : "people"}`} />
           <Detail icon={Ticket} label="Pass code" value={pass.code} mono />

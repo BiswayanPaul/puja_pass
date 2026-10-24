@@ -1,4 +1,4 @@
-import { pujaDays } from "@/data/festival";
+import type { PujaDay } from "@/types";
 
 const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 const compact = new Intl.NumberFormat("en-IN", { notation: "compact", maximumFractionDigits: 1 });
@@ -30,8 +30,8 @@ export function formatDate(date: string, { withYear = true } = {}) {
   return `${day} ${months[month - 1]}${withYear ? ` ${year}` : ""}`;
 }
 
-/** "2026-09-30" -> "Ashtami · 30 Sep" */
-export function formatPujaDate(date: string) {
-  const day = pujaDays.find((item) => item.date === date);
+/** "2026-09-30" -> "Ashtami · 30 Sep" (just the date if it isn't a festival day). */
+export function formatPujaDate(date: string, days: PujaDay[]) {
+  const day = days.find((item) => item.date === date);
   return day ? `${day.label} · ${formatDate(date, { withYear: false })}` : formatDate(date);
 }

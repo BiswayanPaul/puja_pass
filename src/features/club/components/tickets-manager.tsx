@@ -4,7 +4,8 @@ import { useState, useTransition, type FormEvent } from "react";
 import { CalendarPlus, CheckCircle2, Loader2, Pencil, Plus, Ticket, Trash2, TriangleAlert, X } from "lucide-react";
 import { Checkbox, Field, Input, Textarea } from "@/components/ui/field";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { pujaDays, slotTimes } from "@/data/festival";
+import { slotTimes } from "@/data/festival";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import { formatDate, formatINR, formatPujaDate, formatTimeRange } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ClubSlot, TicketTier } from "@/types";
@@ -143,6 +144,7 @@ function AddSlotsSheet({
   onAdded: (result: ClubActionResult) => void;
 }) {
   const { result, setResult, pending, run } = useClubAction();
+  const pujaDays = useFestivalDays();
   const [custom, setCustom] = useState<{ start: string; end: string }[]>([]);
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -194,7 +196,7 @@ function AddSlotsSheet({
             <legend className="text-sm font-semibold text-stone-800">Days</legend>
             <div className="mt-2 grid grid-cols-2 gap-2">
               {pujaDays.map((day) => (
-                <Checkbox key={day.date} name="date" value={day.date} defaultChecked={day.date === defaultDate} label={formatPujaDate(day.date)} className="rounded-lg border border-stone-200 p-2.5" />
+                <Checkbox key={day.date} name="date" value={day.date} defaultChecked={day.date === defaultDate} label={formatPujaDate(day.date, pujaDays)} className="rounded-lg border border-stone-200 p-2.5" />
               ))}
             </div>
           </fieldset>
@@ -305,7 +307,8 @@ function SlotRow({ slot, onResult }: { slot: ClubSlot; onResult: (result: ClubAc
 }
 
 export function TicketsManager({ pandalId, tiers, slots }: { pandalId: string; tiers: TicketTier[]; slots: ClubSlot[] }) {
-  const [date, setDate] = useState(pujaDays[0].date);
+  const pujaDays = useFestivalDays();
+  const [date, setDate] = useState(pujaDays[0]?.date ?? "");
   const [editing, setEditing] = useState<TicketTier | null>(null);
   const [tierSheetOpen, setTierSheetOpen] = useState(false);
   const [slotSheetOpen, setSlotSheetOpen] = useState(false);
@@ -405,7 +408,9 @@ export function TicketsManager({ pandalId, tiers, slots }: { pandalId: string; t
             <ResultMessage result={slotResult} />
           </div>
         )}
-        {daySlots.length ? (
+        {!pujaDays.length ? (
+          <p className="p-8 text-center text-sm text-stone-600">PujaPass hasn&apos;t set this season&apos;s festival days yet. You can add entry windows once they&apos;re announced.</p>
+        ) : daySlots.length ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-160 text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-stone-500">

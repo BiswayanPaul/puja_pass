@@ -9,8 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { FESTIVAL_END, FESTIVAL_START } from "@/data/festival";
-import { areas } from "@/data/pandals";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import type { Pandal } from "@/types";
 
 type FilterSidebarProps = {
@@ -74,6 +73,9 @@ export function FilterSidebar({
 }: FilterSidebarProps) {
   const [areaSearch, setAreaSearch] = useState("");
   const [mapOpen, setMapOpen] = useState(false);
+  const days = useFestivalDays();
+  // Only areas that have pandals listed.
+  const areas = [...new Set(allPandals.map((pandal) => pandal.area))].sort();
   const visibleAreas = areas.filter((area) =>
     area.toLowerCase().includes(areaSearch.toLowerCase()),
   );
@@ -176,8 +178,8 @@ export function FilterSidebar({
           <CalendarDays className="size-4" />
           <input
             type="date"
-            min={FESTIVAL_START}
-            max={FESTIVAL_END}
+            min={days[0]?.date}
+            max={days.at(-1)?.date}
             value={date}
             onChange={(event) => onDateChange(event.target.value)}
             className="min-w-0 flex-1 bg-transparent outline-none"

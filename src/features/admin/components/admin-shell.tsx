@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
-import { ExternalLink, FileCheck2, LayoutDashboard, Menu, ShieldCheck, Store, Users } from "lucide-react";
+import { CalendarDays, ExternalLink, FileCheck2, LayoutDashboard, Menu, ShieldCheck, Store, Users } from "lucide-react";
 import Logo from "@/components/shared/Logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -13,6 +13,7 @@ const nav = [
   { label: "Applications", href: "/admin/applications", icon: FileCheck2 },
   { label: "Clubs", href: "/admin/clubs", icon: Users },
   { label: "Pandals", href: "/admin/pandals", icon: Store },
+  { label: "Festival days", href: "/admin/festival", icon: CalendarDays },
 ];
 
 // The active link depends on the URL, which isn't known while prerendering

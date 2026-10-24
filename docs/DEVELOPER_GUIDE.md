@@ -41,7 +41,7 @@ Product rules that the UI already reflects and the backend must keep:
 - A convenience fee of ₹15 per pass is added at checkout (`CONVENIENCE_FEE_PER_PASS`).
 - Max 8 passes per slot per trail line (`MAX_PASSES_PER_SLOT`).
 
-Festival days are configured in `src/data/festival.ts` (currently Shashthi 28 Sep → Dashami 2 Oct 2026, taken from the design mock-up — **confirm these dates**).
+Festival days live in the database (`FestivalDay`) and are set by platform admins at `/admin/festival`. They are seeded with the 2026 season (Shashthi 28 Sep → Dashami 2 Oct); add next season's days there.
 
 ---
 
@@ -58,10 +58,11 @@ Festival days are configured in `src/data/festival.ts` (currently Shashthi 28 Se
 | Login / register / session | ✅ | **Auth.js v5**: Google + email link, database sessions | Phone/WhatsApp OTP later |
 | Club registration (4 steps) | ✅ | **PostgreSQL** (`ClubApplication`); documents keep file names only | File uploads (§12.6) |
 | Platform admin (`/admin`) | ✅ | **PostgreSQL**: review applications, verify/revoke clubs, publish/feature pandals; `PLATFORM_ADMIN` only | Audit log |
-| Club dashboard | ✅ | Slots/tiers from DB; KPIs, chart, check-ins are mock | Aggregate from DB (§12.5) |
+| Club dashboard | ✅ | **PostgreSQL** aggregates (`src/server/club-stats.ts`): sales, revenue, per day/pass type, check-ins, occupancy | Visitor list + CSV export |
 | Club pandal profile editor | ✅ | **PostgreSQL** via `updatePandalProfile` (`src/features/club/actions.ts`); real Live/Draft status | Photo uploads (§12.5) |
 | Club tickets & slots | ✅ | **PostgreSQL**: pass types, entry windows (bulk add), capacity, pause, delete | Per-tier capacity limits |
-| Entry scanner | ✅ | Fully mock (`src/data/club.ts`) | Camera decoding + check-in API (§12.5) |
+| Entry scanner | ✅ | Phone camera (BarcodeDetector or jsQR) → `verifyScan`/`admitPass`, every scan logged in `CheckIn` | Offline mode |
+| Festival days | ✅ | **PostgreSQL** (`FestivalDay`), edited at `/admin/festival` | — |
 | Saved pandals (heart) | ✅ | localStorage | `SavedPandal` table |
 | QR codes | ✅ | Real QR (`qrcode`) holding a signed link `/p/<code>.<sig>` → public pass check page | Gate check-in in the scanner (§12.5) |
 
@@ -112,7 +113,7 @@ bun install                      # postinstall runs `prisma generate`
 cp .env.example .env             # then set DATABASE_URL
 createdb puja_pass               # if using local Postgres
 bun run db:migrate               # applies prisma/migrations
-bun run db:seed                  # loads the mock data into the DB
+bun run db:seed                  # DEVELOPMENT ONLY: wipes the DB, adds festival days + the demo pandal
 bun run dev                      # http://localhost:3000
 ```
 
@@ -145,10 +146,11 @@ Without an email provider, development only logs that an email would be sent, so
 
 `/login?next=/checkout` returns there after sign-in.
 
-### Scanner demo codes
+### Demo pandal
 
-On `/club/scanner` use the "simulate a scan" chips, or type:
-`SRB-2930-8841` (valid), `SRB-2930-0942` (already used), anything else (invalid).
+`prisma/demo.ts` builds **PujaPass Demo Sarbojanin**, a fictional pandal with a season of bookings, check-ins and reviews (all real rows, no notifications sent). On a live database run `bun run demo:seed <owner-email>`: it also deletes the old real-name sample pandals by id, then makes that email the demo club's only owner. Re-running regenerates the demo on the current festival days. Sign in as the owner to show the dashboard and scanner.
+
+To try the scanner without a phone, type a demo pass code (e.g. a `PUJ-…` code from the booking page) into its "type the code" box; passes for a past day ask for "Admit anyway".
 
 ---
 
@@ -162,7 +164,8 @@ puja_pass/
 ├── prisma/
 │   ├── schema.prisma          # Database schema (section 8)
 │   ├── migrations/            # SQL migrations (commit these)
-│   └── seed.ts                # Loads src/data/* into the DB
+│   ├── seed.ts                # Dev reset: festival days + demo pandal
+│   └── demo.ts                # The demo pandal and its season (also used by scripts/demo-seed.ts)
 ├── public/images/             # Pandal photos used everywhere (and a design mock-up PNG)
 ├── docs/DEVELOPER_GUIDE.md    # This file
 └── src/
@@ -226,11 +229,12 @@ Route groups (folders in parentheses) only share layouts; they don't appear in U
 | `/club/dashboard` | `(club)/club/dashboard/page.tsx` | Server | DB (slots, tiers) + mock KPIs | Chart: `features/club/components/sales-chart.tsx` |
 | `/club/pandals` | `(club)/club/pandals/page.tsx` | Server + client form | DB read | Save is local only |
 | `/club/tickets` | `(club)/club/tickets/page.tsx` | Server + client | DB read | Edits are local only |
-| `/club/scanner` | `(club)/club/scanner/page.tsx` | Client | Mock | Camera view is a placeholder |
+| `/club/scanner` | `(club)/club/scanner/page.tsx` | Streamed + client camera | DB | `verifyScan` / `admitPass` in `src/features/club/scan-actions.ts`; needs HTTPS for the camera |
 | `/admin` | `(admin)/admin/page.tsx` | Static shell + streamed | DB (uncached) | Overview: queue, unverified clubs, drafts ready to publish |
 | `/admin/applications` | `(admin)/admin/applications/page.tsx` | Static shell + streamed | DB | `?status=pending\|approved\|rejected` tabs, oldest pending first |
 | `/admin/applications/[id]` | `(admin)/admin/applications/[id]/page.tsx` | Static shell + streamed | DB | Approve / reject panel |
 | `/admin/clubs`, `/admin/pandals` | `(admin)/admin/…` | Static shell + streamed | DB | Revoke/restore verification; publish/feature |
+| `/admin/festival` | `(admin)/admin/festival/page.tsx` | Static shell + streamed | DB | Add/rename/remove festival days (removal refused while valid passes exist) |
 
 ---
 
@@ -315,7 +319,14 @@ Notes:
   - Templates are React Email components in `emails.tsx`; QR codes are inline attachments (`cid:`).
 - WhatsApp is not sent yet: Meta restricted the WhatsApp Business Account until **business verification**. Visitors share the view link with the WhatsApp share button instead.
 
-**Club area:** each page calls `requireClubAccess(roles)` and loads the member's own pandal with `getClubPandal()` (drafts included). Dashboard KPIs, chart and check-ins are still sample data from `src/data/club.ts`.
+**Club area:** each page calls `requireClubAccess(roles)` and loads the member's own pandal with `getClubPandal()` (drafts included). The dashboard reads `getClubDashboard(pandalId, day)`: counted are valid/used passes in confirmed/completed bookings; revenue is quantity × pass price (no convenience fee); the day defaults to today in India, else the next festival day, else the last.
+
+#### Gate check-in
+
+1. The scanner decodes the QR (a `/p/<code>.<sig>` link) or takes a typed code.
+2. `verifyScan` checks the signature, that the pass is for this pandal and its booking is paid and not cancelled; used passes come back as duplicates. Invalid and duplicate scans are logged.
+3. The result shows the pass's timing: on time (from 15 minutes before the window to its end), early, late or another day. Outside the window staff must tap "Admit anyway".
+4. `admitPass` flips the pass VALID → USED in one conditional update (so two phones can't admit it twice) and logs ADMITTED with the scanner's user id.
 
 ### 7.4 Authentication and access
 
@@ -392,36 +403,25 @@ bun run db:migrate --name describe_change      # creates + applies SQL, regenera
 
 Commit everything in `prisma/migrations/`. Never edit an applied migration; add a new one.
 
-### 8.4 Seed (`prisma/seed.ts`)
+### 8.4 Seed and demo data
 
-- Reads `src/data/*`, **deletes all rows**, then inserts: 7 users, 15 clubs, 15 pandals (+ images), 9 club applications, 16 tiers, 360 slots, 36 reviews, 4 bookings with 6 passes and payments.
-- Users: the demo visitor and club admin, a platform admin (`admin@pujapass.example.com`) and four club applicants.
-- Admin edge cases come from `src/data/admin.ts`:
-  - **Pending applications**: complete; missing police permission; no documents from a first-year club; a registration number already used by Sreebhumi; one waiting since early September.
-  - **Reviewed applications**: one rejected (with notes) and three approved.
-  - **Clubs from those approvals**: a verified club whose draft pandal has an incomplete profile; a verified club whose draft is ready to publish; a club whose verification was revoked (pandal hidden).
-- Connects with `DIRECT_URL` when set, since the pooled Supabase URL can time out transactions.
-- **Seeded pandal, tier and slot ids equal the mock ids** (e.g. pandal id = slug = `sreebhumi-sporting-club`). Rows created later get cuids.
-- If you remove `src/data`, rewrite the seed first.
+- `bun run db:seed` (`prisma/seed.ts`) is for **development databases only**: it deletes every row, adds the 2026 festival days and builds the demo pandal (owner `DEMO_OWNER_EMAIL`, default `demo-owner@pujapass.example`).
+- `bun run demo:seed <email>` (`scripts/demo-seed.ts`) is safe for the live database: it never touches other clubs. See §4 "Demo pandal".
+- Both use `DIRECT_URL` when set, since the pooled Supabase URL can time out transactions.
+- Make yourself an admin with `bun run admin:grant <email>`.
 
 ---
 
-## 9. Mock data and client-side stores
+## 9. Configuration and client-side stores
 
-`src/data/` holds the fake data. It is used by the seed and by the features that are not on the DB yet.
+All content comes from the database. `src/data/` only holds settings:
 
-| File | Contents | Still used at runtime by |
-| --- | --- | --- |
-| `festival.ts` | Puja days, slot times, fee, max passes | Everywhere (config, not mock — keep) |
-| `pandals.ts` | 12 pandals, `areas` list | `areas` (filters, forms); bookings lookups |
-| `ticket-tiers.ts` | 16 tiers | Bookings lookups |
-| `slots.ts` | Deterministic generated availability | Seed only |
-| `reviews.ts` | 3 reviews per pandal | Seed only |
-| `bookings.ts` | 4 bookings for the demo visitor | `useBookings`, `/bookings/[id]` static params |
-| `users.ts` | Demo visitor + club admin | Seed only |
-| `club.ts` | `CLUB_PANDAL_ID`, `CLUB_TODAY`, KPI numbers, daily sales, check-ins, scanner passes | Club dashboard KPIs/chart, scanner, club layout |
+| File | Contents |
+| --- | --- |
+| `festival.ts` | Standard hourly entry windows (defaults in "Add entry windows"), convenience fee, max passes per slot |
+| `areas.ts` | Areas offered in the club registration and profile forms (the explorer's area filter is built from listed pandals) |
 
-`src/lib/queries.ts` and the mock bookings store were removed; `src/data/bookings.ts` is now only read by the seed.
+Browser-only state (§7.2): the trail (cart), bookings remembered on this device, saved pandals.
 
 ---
 
@@ -515,14 +515,7 @@ Also enforce per-tier capacity if you need it (today capacity is per slot = sum 
 
 - **Profile editor**: done. `updatePandalProfile` checks the member's club owns the pandal, validates, saves, and refreshes the public page (`updateTag`). Rules: the club name is read-only (it's what PujaPass verified); a **live** pandal can't be saved with required fields empty (`getProfileGaps`); the slug never changes. Drafts go live when a platform admin publishes them from `/admin/pandals` (they appear under "Ready to publish" once complete). Still to do: photo uploads (Supabase Storage/S3) feeding `PandalImage`; removing and reordering existing photos already saves.
 - **Tickets & slots**: done (`src/features/club/actions.ts`, read with `getClubTiers`/`getClubSlots`, which show real paused/booked state). `saveTicketTier`, `setTierActive`, `addSlots` (chosen festival days × standard or custom windows; existing windows are skipped), `updateSlot` (capacity can't drop below `booked`, checked atomically; pause/resume), `deleteSlot` (only without bookings). Each action checks the member's club runs the pandal and refreshes the public cache tags. Slot capacity is shared by all pass types; `capacityPerSlot` only sets the default for new windows.
-- **Dashboard:** replace `dailySales`, `tierSales`, `todayStats` and `recentCheckIns` with aggregates over `Pass` / `Payment` / `CheckIn` (use `cacheLife("minutes")`).
-- **QR codes:**
-  - The QR should encode a **signed token** (e.g. HMAC of `passId + slotId`), not the plain code.
-- **Scanner** (`entry-scanner.tsx`):
-  - Decode with the camera (`@zxing/browser` or `BarcodeDetector`).
-  - POST to a check-in action that verifies the token and atomically flips the pass (`UPDATE "Pass" SET status='USED', "checkedInAt"=now() WHERE id=$1 AND status='VALID'`).
-  - Log every scan to `CheckIn`.
-  - Consider offline signature verification for poor network near pandals.
+- **Dashboard, QR codes and scanner:** done (§7.3 "Gate check-in"). Still to do: offline scanning for weak networks near pandals (verify signatures on the phone and sync check-ins later).
 - **New screens:** bookings/visitor list with search + CSV export, payouts/settlements, staff accounts (`ClubMember` role `SCANNER`).
 
 ### 12.6 Club onboarding and platform admin
@@ -568,12 +561,11 @@ Still to do:
 | "Kolkata" dropdown in explorer hero does nothing | `pandal-explorer-hero.tsx` | Wire it to the area filter or remove it. |
 | "Theme / Style" and "Facilities" filter groups from the design aren't built | `filter-sidebar.tsx` | Data exists (`category`, `amenities`). |
 | "Near Me" uses a fake distance | `server/mappers.ts` | Derived from the stylised map position. |
-| Club dashboard KPIs, chart, check-ins and scanner are mock | `src/data/club.ts` | `CLUB_TODAY` is fixed to Ashtami 2026-09-30. |
 | Emails are sent from a personal Gmail account | `.env` (`SMTP_*`) | Free stopgap capped at ~500/day. Buy a domain, verify it in Resend, then remove `SMTP_USER`/`SMTP_PASS` and set `EMAIL_FROM` to the domain. |
 | Booking reference can't be looked up by email | `/my-bookings` | "My bookings" lists bookings made in this browser; other devices need the emailed link until auth exists. |
 | Slot picker always starts on Shashthi | `slot-picker.tsx` | Should default to today (or the next festival day) once real dates matter; compute it outside render. |
-| Festival dates are last year's | `src/data/festival.ts` | 28 Sep – 2 Oct 2026. Update `pujaDays` for 2027: clubs can only add entry windows on these days, and visitors only see these days. |
-| Real club names with invented prices and ratings | `src/data/*`, DB seed | Replace with clubs' real data before going public. |
+| Festival days are last season's | `/admin/festival` | 28 Sep – 2 Oct 2026. Add 2027's days in the admin area, then re-run `bun run demo:seed <email>` to move the demo onto them. |
+| The scanner camera needs HTTPS | `entry-scanner.tsx` | Browsers only allow the camera on HTTPS or `localhost`; on a phone, test against the deployed site. |
 | Old trail data is dropped | `use-trail.ts` | Key bumped to `pujapass:trail:v2` when lines became snapshots. |
 | Headings use the system serif | `globals.css` | The mock-up suggests a display serif (e.g. Fraunces/Playfair via `next/font`). |
 | `.dark` theme tokens exist but nothing uses them | `globals.css` | Implement dark mode or remove them. |

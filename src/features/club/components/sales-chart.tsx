@@ -10,8 +10,10 @@ export function SalesChart({
   data: DailySales[];
   highlightDate?: string;
 }) {
-  const max = Math.max(...data.map((day) => day.tickets));
-  const ceiling = Math.ceil(max / 2000) * 2000;
+  const max = Math.max(0, ...data.map((day) => day.tickets));
+  // Round the top of the axis up to a tidy number (e.g. 6,000); 10 when there are no sales yet.
+  const magnitude = max > 0 ? 10 ** Math.floor(Math.log10(max)) : 10;
+  const ceiling = max > 0 ? Math.ceil(max / magnitude) * magnitude : 10;
   const ticks = [ceiling, ceiling / 2, 0];
 
   return (

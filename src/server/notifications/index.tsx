@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { bookingShareText, whatsappShareUrl } from "@/lib/share";
 import { bookingUrl, passQrUrl } from "../booking-links";
 import { bookingInclude, toBooking } from "../bookings";
+import { getFestivalDays } from "../festival";
 import { BookingCancelledEmail, BookingConfirmedEmail } from "./emails";
 import { sendEmail } from "./email";
 
@@ -62,6 +63,7 @@ async function send(notification: NotificationWithBooking) {
           booking={booking}
           manageUrl={bookingUrl(booking.id, "manage")}
           whatsappShareUrl={whatsappShareUrl(bookingShareText(booking.id, viewUrl))}
+          festivalDays={await getFestivalDays()}
           qrContentIds={Object.fromEntries(attachments.map((attachment, index) => [booking.passes[index].code, attachment.contentId]))}
         />
       ),

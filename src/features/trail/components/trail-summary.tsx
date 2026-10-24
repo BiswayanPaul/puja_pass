@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { CONVENIENCE_FEE_PER_PASS } from "@/data/festival";
 import { formatINR, formatPujaDate, formatTime } from "@/lib/format";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import type { useTrail } from "../use-trail";
 
 export function TrailSummary({ trail, children }: { trail: ReturnType<typeof useTrail>; children?: ReactNode }) {
+  const days = useFestivalDays();
   return (
     <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
       <h2 className="font-serif text-2xl font-semibold text-stone-950">Trail summary</h2>
@@ -13,7 +15,7 @@ export function TrailSummary({ trail, children }: { trail: ReturnType<typeof use
             <span className="min-w-0">
               <span className="block truncate font-medium text-stone-900">{line.pandalName}</span>
               <span className="block text-xs text-stone-500">
-                {formatPujaDate(line.date)} · {formatTime(line.startTime)} · {line.quantity} × {line.tierName}
+                {formatPujaDate(line.date, days)} · {formatTime(line.startTime)} · {line.quantity} × {line.tierName}
               </span>
             </span>
             <span className="shrink-0 font-medium text-stone-900">{formatINR(line.lineTotal)}</span>

@@ -3,7 +3,8 @@
 import { CheckCircle2, Minus, Plus, Route, TicketCheck } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { MAX_PASSES_PER_SLOT, pujaDays } from "@/data/festival";
+import { MAX_PASSES_PER_SLOT } from "@/data/festival";
+import { useFestivalDays } from "@/features/festival/festival-context";
 import { addToTrail } from "@/features/trail/use-trail";
 import { formatDate, formatINR, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,8 @@ export function availability(slot: Slot) {
 
 export function SlotPicker({ pandal, tiers, slots }: { pandal: Pandal; tiers: TicketTier[]; slots: Slot[] }) {
   const activeTiers = tiers.filter((tier) => tier.active);
-  const [date, setDate] = useState(pujaDays[0].date);
+  const pujaDays = useFestivalDays();
+  const [date, setDate] = useState(pujaDays[0]?.date ?? "");
   const [tierId, setTierId] = useState(activeTiers[0]?.id ?? "");
   const [slotId, setSlotId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(2);
