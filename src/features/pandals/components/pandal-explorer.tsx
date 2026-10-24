@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SlidersHorizontal } from "lucide-react";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useSavedPandals } from "../use-saved-pandals";
 import { FilterChips } from "./filter-chips";
 import { FilterSidebar } from "./filter-sidebar";
 import { PandalBenefits } from "./pandal-benefits";
@@ -31,6 +32,7 @@ const quickFilters: Record<string, (pandal: Pandal) => boolean> = {
 export function PandalExplorer({ pandals }: { pandals: Pandal[] }) {
   const searchParams = useSearchParams();
   const festivalDays = useFestivalDays();
+  const { savedIds } = useSavedPandals();
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [activeFilter, setActiveFilter] = useState("All Pandals");
   const [areas, setAreas] = useState<string[]>([]);
@@ -48,7 +50,7 @@ export function PandalExplorer({ pandals }: { pandals: Pandal[] }) {
       const matchesArea = !areas.length || areas.includes(pandal.area);
       const matchesEntry =
         !entryTypes.length || entryTypes.includes(pandal.entryType);
-      const matchesQuickFilter = quickFilters[activeFilter]?.(pandal) ?? true;
+      const matchesQuickFilter = activeFilter === "Saved" ? savedIds.includes(pandal.id) : (quickFilters[activeFilter]?.(pandal) ?? true);
       return matchesQuery && matchesArea && matchesEntry && matchesQuickFilter;
     });
     return [...filtered].sort((a, b) =>
@@ -58,7 +60,7 @@ export function PandalExplorer({ pandals }: { pandals: Pandal[] }) {
           ? b.rating - a.rating
           : Number(b.featured) - Number(a.featured) || b.rating - a.rating,
     );
-  }, [activeFilter, areas, entryTypes, pandals, query, sortBy]);
+  }, [activeFilter, areas, entryTypes, pandals, query, savedIds, sortBy]);
 
   const matchingFeatured = matchingPandals.filter((pandal) => pandal.featured);
   const clearFilters = () => {

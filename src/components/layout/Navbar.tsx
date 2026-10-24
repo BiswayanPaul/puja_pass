@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Suspense } from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import type { Session } from "next-auth";
-import { LayoutDashboard, LogOut, Menu, Route, ScanLine, ShieldCheck, Sparkles, Ticket, UserRound } from "lucide-react";
+import { Heart, LayoutDashboard, LogOut, Menu, Route, ScanLine, ShieldCheck, Sparkles, Ticket, UserRound } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { displayName } from "@/lib/users";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,7 @@ type SessionUser = Session["user"];
 function accountLinks(user: SessionUser) {
   return [
     { label: "My bookings", href: "/my-bookings", icon: Ticket },
+    { label: "Saved pandals", href: "/saved", icon: Heart },
     { label: "My Puja trail", href: "/trail", icon: Route },
     ...(user.club?.role === "SCANNER"
       ? [{ label: "Entry scanner", href: "/club/scanner", icon: ScanLine }]

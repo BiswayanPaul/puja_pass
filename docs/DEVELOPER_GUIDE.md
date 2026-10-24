@@ -63,7 +63,7 @@ Festival days live in the database (`FestivalDay`) and are set by platform admin
 | Club tickets & slots | ✅ | **PostgreSQL**: pass types, entry windows (bulk add), capacity, pause, delete | Per-tier capacity limits |
 | Entry scanner | ✅ | Phone camera (BarcodeDetector or jsQR) → `verifyScan`/`admitPass`, every scan logged in `CheckIn` | Offline mode |
 | Festival days | ✅ | **PostgreSQL** (`FestivalDay`), edited at `/admin/festival` | — |
-| Saved pandals (heart) | ✅ | localStorage | `SavedPandal` table |
+| Saved pandals (heart) | ✅ | **PostgreSQL** (`SavedPandal`) when signed in; localStorage for guests, merged into the account on sign-in. Listed at `/saved`, "Saved" chip on `/pandals`, count on the club dashboard | — |
 | QR codes | ✅ | Real QR (`qrcode`) holding a signed link `/p/<code>.<sig>` → public pass check page | Gate check-in in the scanner (§12.5) |
 
 ---
@@ -220,6 +220,7 @@ Route groups (folders in parentheses) only share layouts; they don't appear in U
 | `/pandals` | `(marketing)/pandals/page.tsx` | Server page + client explorer | DB (`getPandals`) | Filters run client-side over the full list |
 | `/pandals/[slug]` | `(marketing)/pandals/[slug]/page.tsx` | Server, `generateStaticParams` | DB | Booking panel = client `SlotPicker` |
 | `/trail` | `(visitor)/trail/page.tsx` | Server + client | localStorage; DB for suggestions | Same-time clash warning |
+| `/saved` | `(visitor)/saved/page.tsx` | Server page + client list | DB (`getPandals`) + `useSavedPandals()` | Account saves when signed in, this device's otherwise |
 | `/checkout` | `(visitor)/checkout/page.tsx` | Client form | localStorage | Simulated payment, then `/bookings/{id}?new=1` |
 | `/my-bookings` | `(visitor)/my-bookings/page.tsx` | Client | Mock + localStorage | Upcoming / Past / Cancelled tabs |
 | `/bookings/[bookingId]` | `(visitor)/bookings/[bookingId]/page.tsx` | Static shell + client | Mock + localStorage | Reads id via `useParams` inside Suspense |
@@ -273,7 +274,7 @@ All client stores use `createPersistentStore(key, initial)` in `src/lib/create-s
 | --- | --- | --- |
 | Trail (cart) | `pujapass:trail:v2` | `useTrail()`, `addToTrail`, `updateTrailQuantity`, `removeFromTrail`, `clearTrail` |
 | Created/cancelled bookings | `pujapass:bookings` | `useBookings()`, `useBooking(id)`, `createBooking`, `cancelBooking` |
-| Saved pandals | `pujapass:saved-pandals` | `useSavedPandals()` |
+| Saved pandals (guests only) | `pujapass:saved-pandals` | `useSavedPandals()`: signed-in visitors use `SavedPandal` via `src/features/pandals/saved-actions.ts`; on sign-in `syncSavedPandals` moves this store into the account and empties it |
 
 Notes:
 
@@ -421,7 +422,7 @@ All content comes from the database. `src/data/` only holds settings:
 | `festival.ts` | Standard hourly entry windows (defaults in "Add entry windows"), convenience fee, max passes per slot |
 | `areas.ts` | Areas offered in the club registration and profile forms (the explorer's area filter is built from listed pandals) |
 
-Browser-only state (§7.2): the trail (cart), bookings remembered on this device, saved pandals.
+Browser-only state (§7.2): the trail (cart), bookings remembered on this device, guests' saved pandals.
 
 ---
 
@@ -539,7 +540,6 @@ Still to do:
 
 - **Notifications:** WhatsApp delivery once Meta business verification passes (add a `WHATSAPP` branch in `send()`); a reminder before each slot.
 - **Reviews:** let visitors review after a `USED` pass; recompute `ratingAverage`/`reviewCount`.
-- **Saved pandals:** persist to `SavedPandal` for signed-in users.
 - **Real map:**
   - store `latitude`/`longitude` and use Leaflet or Google Maps
   - replace the `mapX/mapY` placeholder and the derived `distanceKm` in `mappers.ts`

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { PandalCard } from "@/features/pandals/components/pandal-card";
 import { MobileBookBar } from "@/features/pandals/components/mobile-book-bar";
+import { SavePandalButton } from "@/features/pandals/components/save-pandal-button";
 import { SlotPicker } from "@/features/pandals/components/slot-picker";
 import { getFestivalDays } from "@/server/festival";
 import { cn } from "@/lib/utils";
@@ -133,6 +134,7 @@ async function PandalDetail({ params }: { params: PageProps<"/pandals/[slug]">["
             <span className="inline-flex items-center gap-1.5"><MapPin className="size-4 text-orange-400" aria-hidden="true" />{pandal.address}</span>
             <span className="inline-flex items-center gap-1.5"><Star className="size-4 fill-amber-400 text-amber-400" aria-hidden="true" /><strong className="text-white">{pandal.rating}</strong> ({pandal.reviewCount} reviews)</span>
           </div>
+          <SavePandalButton pandalId={pandal.id} pandalName={pandal.name} variant="pill" className="mt-5" />
         </div>
       </section>
 

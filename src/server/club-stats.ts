@@ -24,7 +24,7 @@ const weekday = new Intl.DateTimeFormat("en-IN", { weekday: "short", timeZone: "
 type DayTierRow = { date: Date; tierId: string; visitors: number; revenue: number; checkedIn: number };
 
 export type ClubDashboard = {
-  totals: { visitors: number; revenue: number; bookings: number; cancelledBookings: number };
+  totals: { visitors: number; revenue: number; bookings: number; cancelledBookings: number; savedBy: number };
   days: PujaDay[];
   sales: DailySales[];
   byTier: { tierId: string; name: string; visitors: number; revenue: number }[];
@@ -39,7 +39,7 @@ function defaultDay(days: PujaDay[]) {
 }
 
 export async function getClubDashboard(pandalId: string, requestedDay?: string): Promise<ClubDashboard> {
-  const [festivalDays, rows, totals, slotDates, tiers, recent] = await Promise.all([
+  const [festivalDays, rows, totals, slotDates, tiers, recent, savedBy] = await Promise.all([
     getFestivalDays(),
     prisma.$queryRaw<DayTierRow[]>`
       SELECT s.date, p."tierId",
@@ -59,6 +59,7 @@ export async function getClubDashboard(pandalId: string, requestedDay?: string):
     prisma.slot.findMany({ where: { pandalId }, distinct: ["date"], select: { date: true } }),
     prisma.ticketTier.findMany({ where: { pandalId }, select: { id: true, name: true }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] }),
     getRecentCheckIns(pandalId, 8),
+    prisma.savedPandal.count({ where: { pandalId } }),
   ]);
 
   // Festival days plus any other day this pandal has windows on (e.g. a past season).
@@ -82,6 +83,7 @@ export async function getClubDashboard(pandalId: string, requestedDay?: string):
       revenue: rows.reduce((total, row) => total + row.revenue, 0),
       bookings: totals[0]?.bookings ?? 0,
       cancelledBookings: totals[0]?.cancelled ?? 0,
+      savedBy,
     },
     days,
     sales: days.map((day) => {

@@ -3,6 +3,7 @@
 import {
   Building2,
   Flame,
+  Heart,
   Leaf,
   MapPin,
   Sparkles,
@@ -15,6 +16,7 @@ type Filter = { label: string; icon: ComponentType<{ className?: string }> };
 
 const filters: Filter[] = [
   { label: "All Pandals", icon: Building2 },
+  { label: "Saved", icon: Heart },
   { label: "Most Popular", icon: Flame },
   { label: "Free Entry", icon: TicketCheck },
   { label: "Paid Entry", icon: TicketCheck },

@@ -5,6 +5,7 @@ import { ArrowUpRight, Mail, Sparkles } from "lucide-react";
 const exploreLinks = [
   { label: "Explore Pandals", href: "/pandals" },
   { label: "Plan Your Puja Trail", href: "/trail" },
+  { label: "Saved Pandals", href: "/saved" },
   { label: "My Bookings", href: "/my-bookings" },
 ];
 

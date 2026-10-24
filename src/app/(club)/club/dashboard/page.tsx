@@ -130,6 +130,12 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<"/club/dash
               <p className="text-stone-500">Cancelled</p>
               <p className="mt-1 text-xl font-semibold text-stone-950">{totals.cancelledBookings.toLocaleString("en-IN")}</p>
             </div>
+            <div className="col-span-2 rounded-xl bg-orange-50 p-3">
+              <p className="text-orange-900">Saved by visitors</p>
+              <p className="mt-1 text-xl font-semibold text-stone-950">
+                {totals.savedBy.toLocaleString("en-IN")} <span className="text-sm font-normal text-stone-600">{totals.savedBy === 1 ? "visitor has" : "visitors have"} hearted your pandal</span>
+              </p>
+            </div>
           </div>
         </section>
       </div>
